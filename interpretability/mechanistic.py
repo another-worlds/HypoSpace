@@ -1,0 +1,34 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Iterable, List
+
+from core.hierarchy import Feature
+
+
+@dataclass(slots=True)
+class InterventionResult:
+    feature_id: str
+    baseline: float
+    ablated: float
+    effect_size: float
+
+
+class MechanisticAnalyzer:
+    """Placeholder pyvene-compatible mechanistic checks."""
+
+    def run_interventions(self, features: Iterable[Feature]) -> List[InterventionResult]:
+        rows: List[InterventionResult] = []
+        for feature in features:
+            baseline = feature.score
+            ablated = baseline * 0.5
+            effect_size = max(0.0, baseline - ablated)
+            rows.append(
+                InterventionResult(
+                    feature_id=feature.id,
+                    baseline=baseline,
+                    ablated=ablated,
+                    effect_size=effect_size,
+                )
+            )
+        return rows
