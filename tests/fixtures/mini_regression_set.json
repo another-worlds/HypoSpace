@@ -1,0 +1,57 @@
+[
+  {
+    "model": "demo",
+    "layer": "layer_r0",
+    "activations": [
+      0.15,
+      -0.91,
+      0.33,
+      0.04
+    ],
+    "top_k": 3,
+    "expected_indices": [
+      1,
+      2,
+      0
+    ],
+    "expected_scores": [
+      1.0,
+      0.362637,
+      0.164835
+    ],
+    "expected_labels": [
+      "high-intensity concept around activation index 1",
+      "low-intensity concept around activation index 2",
+      "low-intensity concept around activation index 0"
+    ],
+    "expected_faithfulness": 0.254579,
+    "expected_stability": 0.300123,
+    "expected_risk_flag": "low_faithfulness"
+  },
+  {
+    "model": "demo",
+    "layer": "layer_r1",
+    "activations": [
+      0.99,
+      -0.1,
+      0.77,
+      -0.65
+    ],
+    "top_k": 2,
+    "expected_indices": [
+      0,
+      2
+    ],
+    "expected_scores": [
+      1.0,
+      0.777778
+    ],
+    "expected_labels": [
+      "high-intensity concept around activation index 0",
+      "medium-intensity concept around activation index 2"
+    ],
+    "expected_faithfulness": 0.444444,
+    "expected_stability": 0.875,
+    "expected_risk_flag": "low_faithfulness"
+  }
+]
