@@ -23,7 +23,7 @@ class HypoSpaceAPI:
 
     def __init__(self, config: DecoderConfig | None = None) -> None:
         self.config = config or DecoderConfig()
-        self.extractor = ActivationExtractor()
+        self.extractor = ActivationExtractor(cache_dir=self.config.runtime.cache_dir)
         self.preprocessor = ActivationPreprocessor()
         self.decoder = RealityDecoder(config=self.config)
         self.semantic = SemanticInterpreter()
@@ -37,7 +37,13 @@ class HypoSpaceAPI:
         raw_activations: Iterable[float],
         version: str = "0.1.0",
     ) -> DecodeResult:
-        values = self.preprocessor.normalize(self.extractor.extract(raw_activations))
+        values = self.preprocessor.normalize(
+            self.extractor.extract(
+                raw_activations,
+                model_name=model_name,
+                layer=layer,
+            )
+        )
         result = self.decoder.decode(model_name=model_name, layer=layer, activations=values, version=version)
         result.features = self.semantic.annotate(result.features)
         return result
