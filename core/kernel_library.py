@@ -17,6 +17,7 @@ class KernelTemplate:
     model_name: str
     layer: str
     features: List[Feature] = field(default_factory=list)
+    metadata: Dict[str, str] = field(default_factory=dict)
 
 
 class KernelLibrary:
@@ -60,9 +61,52 @@ class KernelLibrary:
         latest_version = payload["latest"]
         return self.load(kernel_id, latest_version)
 
-    def match(self, features: Iterable[Feature], threshold: float = 0.8) -> Dict[str, float]:
-        """MVP placeholder matcher returning normalized score by feature id."""
-        return {feature.id: min(1.0, feature.score / max(threshold, 1e-6)) for feature in features}
+    def match(
+        self,
+        kernel_id: str,
+        features: Iterable[Feature],
+        version: str | None = None,
+        threshold: float = 0.8,
+    ) -> Dict[str, float]:
+        """Compare incoming features against a persisted kernel by source index."""
+        template = self.load(kernel_id, version) if version else self.load_latest(kernel_id)
+        reference = {feature.source_index: feature for feature in template.features}
+
+        result: Dict[str, float] = {}
+        for feature in features:
+            anchor = reference.get(feature.source_index)
+            if not anchor:
+                result[feature.id] = 0.0
+                continue
+            delta = abs(anchor.score - feature.score)
+            similarity = max(0.0, 1.0 - delta / max(threshold, 1e-6))
+            result[feature.id] = min(1.0, similarity)
+        return result
+
+    def merge(self, kernel_id: str, base_version: str, candidate_version: str, merged_version: str) -> KernelTemplate:
+        """Merge two kernel versions into a single artifact by source index."""
+        base = self.load(kernel_id, base_version)
+        candidate = self.load(kernel_id, candidate_version)
+
+        merged_by_index: Dict[int, Feature] = {feature.source_index: feature for feature in base.features}
+        for feature in candidate.features:
+            existing = merged_by_index.get(feature.source_index)
+            if existing is None or feature.score > existing.score:
+                merged_by_index[feature.source_index] = feature
+
+        merged = KernelTemplate(
+            kernel_id=kernel_id,
+            version=merged_version,
+            model_name=base.model_name,
+            layer=base.layer,
+            features=sorted(merged_by_index.values(), key=lambda row: row.score, reverse=True),
+            metadata={
+                "merge_base_version": base_version,
+                "merge_candidate_version": candidate_version,
+            },
+        )
+        self.save(merged)
+        return merged
 
     def _read_manifest(self) -> Dict[str, Dict[str, object]]:
         if not self.manifest_path.exists():

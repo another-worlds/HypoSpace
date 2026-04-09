@@ -19,6 +19,8 @@ def test_kernel_artifact_contract(tmp_path: Path) -> None:
     assert payload["model_name"] == "demo"
     assert payload["layer"] == "layer_3"
     assert isinstance(payload["features"], list)
+    assert isinstance(payload["metadata"], dict)
+    assert "created_at_utc" in payload["metadata"]
     assert {"id", "layer", "score", "source_index", "label"}.issubset(payload["features"][0].keys())
 
 
