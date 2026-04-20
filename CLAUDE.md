@@ -112,15 +112,43 @@ from core.config import DecoderConfig, RuntimeConfig
 
 api = HypoSpaceAPI(config=DecoderConfig(top_k=8, runtime=RuntimeConfig(device="cpu")))
 
-result = api.decode_from_model(
-    model_name="gpt2",          # any HuggingFace model id
-    layer="layer_0",            # HypoSpace artifact name
+# One-call path (decode + governance scorecard):
+result = api.decode_and_score_from_model(
+    model_name="gpt2",             # any HuggingFace model id
+    layer="layer_0",               # HypoSpace artifact name
     layer_path="transformer.h.0",  # nnsight attribute path into the model
     inputs="The quick brown fox",  # text or token ids
-    token_index=-1,             # which token position to extract (-1 = last)
+    token_index=-1,                # which token position to extract (-1 = last)
     version="0.1.0",
 )
-# result is a DecodeResult — pass to api.scorecard() for governance
+# result is a HypoSpaceResult with .decode (DecodeResult) and .scorecard
+
+# Decode only (no governance):
+decode_result = api.decode_from_model(
+    model_name="gpt2",
+    layer="layer_0",
+    layer_path="transformer.h.0",
+    inputs="The quick brown fox",
+)
+scorecard = api.scorecard(decode_result)
+```
+
+The model is loaded once per `HypoSpaceAPI` instance and reused across calls as long as
+`model_name` does not change. Activations are cached by input key
+`(model_name, layer_path, inputs, token_index)` under `.hypo_cache/nnsight/`; repeated
+calls with identical arguments skip the forward pass entirely.
+
+To extract multiple layers in a single forward pass use `NNSightExtractor` directly:
+
+```python
+from data.nnsight_extractor import NNSightExtractor
+
+ex = NNSightExtractor("gpt2", device="cpu", cache_dir=".hypo_cache")
+layers = ex.extract_layers(
+    "The quick brown fox",
+    layer_paths=["transformer.h.0", "transformer.h.6", "transformer.h.11"],
+)
+# layers is Dict[str, List[float]] — one entry per layer_path
 ```
 
 `layer_path` uses dot-notation with integer segments for list indexing:
