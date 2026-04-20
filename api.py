@@ -8,7 +8,7 @@ from core.decoder import DecodeResult, RealityDecoder
 from data.extractor import ActivationExtractor
 from data.preprocessor import ActivationPreprocessor
 from interpretability.faithfulness import FaithfulnessChecker, GovernanceScorecard
-from interpretability.mechanistic import MechanisticAnalyzer
+from interpretability.mechanistic import InterventionResult, MechanisticAnalyzer
 from interpretability.semantic import SemanticInterpreter
 
 if TYPE_CHECKING:
@@ -56,8 +56,13 @@ class HypoSpaceAPI:
         result.features = self.semantic.annotate(result.features)
         return result
 
-    def scorecard(self, result: DecodeResult) -> GovernanceScorecard:
-        interventions = self.mechanistic.run_interventions(result.features)
+    def scorecard(
+        self,
+        result: DecodeResult,
+        interventions: list[InterventionResult] | None = None,
+    ) -> GovernanceScorecard:
+        if interventions is None:
+            interventions = self.mechanistic.run_interventions(result.features)
         return self.faithfulness.evaluate(interventions)
 
     def decode_and_score(
@@ -130,7 +135,8 @@ class HypoSpaceAPI:
         """Extract live activations via nnsight, decode, and score governance.
 
         Single-call equivalent of decode_from_model() + scorecard() for the
-        live-model path.
+        live-model path. Uses real zero-ablation interventions when torch is
+        available; falls back to the stub otherwise.
         """
         decode_result = self.decode_from_model(
             model_name=model_name,
@@ -140,4 +146,36 @@ class HypoSpaceAPI:
             token_index=token_index,
             version=version,
         )
-        return HypoSpaceResult(decode=decode_result, scorecard=self.scorecard(decode_result))
+        interventions = self._run_real_interventions(
+            features=decode_result.features,
+            model_name=model_name,
+            layer_path=layer_path,
+            inputs=inputs,
+            token_index=token_index,
+        )
+        return HypoSpaceResult(
+            decode=decode_result,
+            scorecard=self.scorecard(decode_result, interventions=interventions),
+        )
+
+    def _run_real_interventions(
+        self,
+        features: list,
+        model_name: str,
+        layer_path: str,
+        inputs: Union[str, Iterable[int]],
+        token_index: int,
+    ) -> list[InterventionResult]:
+        """Attempt real interventions via PyVeneInterventionRunner; fall back to stub."""
+        try:
+            from data.pyvene_runner import PyVeneInterventionRunner
+            import torch  # noqa: F401
+            nnsight_ex = self._nnsight_extractor(model_name)
+            runner = PyVeneInterventionRunner(
+                lm=nnsight_ex._lm,
+                layer_path=layer_path,
+                device=self.config.runtime.device,
+            )
+            return runner.run_interventions(features, inputs, token_index)
+        except ImportError:
+            return self.mechanistic.run_interventions(features)
