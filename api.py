@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Iterable, Union
 
 from core.config import DecoderConfig
 from core.decoder import DecodeResult, RealityDecoder
@@ -62,3 +62,42 @@ class HypoSpaceAPI:
         decode_result = self.decode(model_name=model_name, layer=layer, raw_activations=raw_activations, version=version)
         scorecard = self.scorecard(decode_result)
         return HypoSpaceResult(decode=decode_result, scorecard=scorecard)
+
+    def decode_from_model(
+        self,
+        model_name: str,
+        layer: str,
+        layer_path: str,
+        inputs: Union[str, Iterable[int]],
+        token_index: int = -1,
+        version: str = "0.1.0",
+    ) -> DecodeResult:
+        """Extract live activations via nnsight and decode.
+
+        Args:
+            model_name: HuggingFace model identifier (e.g. "gpt2").
+            layer: HypoSpace layer name used for artifact naming.
+            layer_path: nnsight attribute path (e.g. "transformer.h.0").
+            inputs: Text string or token id sequence passed to the model.
+            token_index: Token position to extract; -1 means last token.
+            version: Kernel version tag.
+
+        Returns:
+            DecodeResult with features extracted from the live model.
+        """
+        from data.nnsight_extractor import NNSightExtractor
+
+        nnsight_ex = NNSightExtractor(
+            model_name=model_name,
+            device=self.config.runtime.device,
+            cache_dir=self.config.runtime.cache_dir,
+        )
+        raw_activations = nnsight_ex.extract(
+            inputs=inputs,
+            layer_path=layer_path,
+            token_index=token_index,
+        )
+        values = self.preprocessor.normalize(raw_activations)
+        result = self.decoder.decode(model_name=model_name, layer=layer, activations=values, version=version)
+        result.features = self.semantic.annotate(result.features)
+        return result

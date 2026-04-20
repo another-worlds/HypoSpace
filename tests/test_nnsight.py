@@ -1,0 +1,107 @@
+from __future__ import annotations
+
+import pytest
+
+from data.nnsight_extractor import NNSightExtractor, nnsight_available
+
+# All tests in this module are skipped when nnsight/torch are not installed.
+pytestmark = pytest.mark.skipif(
+    not nnsight_available(),
+    reason="nnsight and torch are required for these tests",
+)
+
+_MODEL = "gpt2"
+_LAYER = "transformer.h.0"
+_HIDDEN_DIM = 768  # GPT-2 small hidden size
+
+
+def test_nnsight_available() -> None:
+    assert nnsight_available()
+
+
+def test_extract_returns_float_list(tmp_path) -> None:
+    extractor = NNSightExtractor(_MODEL, device="cpu", cache_dir=str(tmp_path))
+    values = extractor.extract("Hello world", layer_path=_LAYER, token_index=-1)
+
+    assert isinstance(values, list)
+    assert len(values) == _HIDDEN_DIM
+    assert all(isinstance(v, float) for v in values)
+
+
+def test_extract_last_vs_first_token_differ(tmp_path) -> None:
+    extractor = NNSightExtractor(_MODEL, device="cpu", cache_dir=str(tmp_path))
+    last = extractor.extract("Hello world", layer_path=_LAYER, token_index=-1)
+    first = extractor.extract("Hello world", layer_path=_LAYER, token_index=0)
+
+    assert last != first
+
+
+def test_extract_caches_result(tmp_path) -> None:
+    extractor = NNSightExtractor(_MODEL, device="cpu", cache_dir=str(tmp_path))
+    first = extractor.extract("Hello world", layer_path=_LAYER)
+    second = extractor.extract("Hello world", layer_path=_LAYER)
+
+    assert first == second
+
+
+def test_extract_different_layers_differ(tmp_path) -> None:
+    extractor = NNSightExtractor(_MODEL, device="cpu", cache_dir=str(tmp_path))
+    layer0 = extractor.extract("Hello world", layer_path="transformer.h.0")
+    layer1 = extractor.extract("Hello world", layer_path="transformer.h.1")
+
+    assert layer0 != layer1
+
+
+def test_require_raises_when_unavailable(monkeypatch) -> None:
+    # Patch nnsight_available to pretend nnsight is missing.
+    import data.nnsight_extractor as mod
+    monkeypatch.setattr(mod, "nnsight_available", lambda: False)
+
+    with pytest.raises(ImportError, match="pip install nnsight"):
+        NNSightExtractor.require()
+
+
+def test_api_decode_from_model(tmp_path) -> None:
+    from api import HypoSpaceAPI
+    from core.config import DecoderConfig, RuntimeConfig
+
+    api = HypoSpaceAPI(
+        config=DecoderConfig(
+            runtime=RuntimeConfig(cache_dir=str(tmp_path)),
+            top_k=5,
+        )
+    )
+    result = api.decode_from_model(
+        model_name=_MODEL,
+        layer="layer_0",
+        layer_path=_LAYER,
+        inputs="The quick brown fox",
+        version="0.1.0",
+    )
+
+    assert len(result.features) == 5
+    assert result.kernel_path is not None
+    assert all(f.label is not None for f in result.features)
+
+
+def test_api_decode_from_model_scorecard(tmp_path) -> None:
+    from api import HypoSpaceAPI
+    from core.config import DecoderConfig, RuntimeConfig
+
+    api = HypoSpaceAPI(
+        config=DecoderConfig(
+            runtime=RuntimeConfig(cache_dir=str(tmp_path)),
+            top_k=4,
+        )
+    )
+    decode_result = api.decode_from_model(
+        model_name=_MODEL,
+        layer="layer_0",
+        layer_path=_LAYER,
+        inputs="Test sentence",
+    )
+    scorecard = api.scorecard(decode_result)
+
+    assert 0.0 <= scorecard.faithfulness_score <= 1.0
+    assert 0.0 <= scorecard.stability_score <= 1.0
+    assert scorecard.risk_flag in {"ok", "low_faithfulness"}

@@ -2,9 +2,9 @@
 
 ## Project Overview
 
-HypoSpace is an **MVP-stage** Python 3.11+ model interpretability toolkit. It takes raw neural network activations and produces a structured "reality decode": top-k concept features ranked by magnitude, semantic auto-labels, mechanistic intervention checks, and a governance scorecard with configurable faithfulness/stability thresholds.
+HypoSpace is a Python 3.11+ model interpretability toolkit. It takes raw neural network activations and produces a structured "reality decode": top-k concept features ranked by magnitude, semantic auto-labels, mechanistic intervention checks, and a governance scorecard with configurable faithfulness/stability thresholds.
 
-Current stage: working E2E skeleton with CLI, Streamlit UI, and a full test suite. No external ML dependencies yet — the heavy SAE backends (pyvene, nnsight) are planned for later stages.
+Current stage: working E2E skeleton with CLI, Streamlit UI, full test suite, and **nnsight live extraction** via `HypoSpaceAPI.decode_from_model()`. The heavy SAE backend (pyvene) is planned for a later stage.
 
 ---
 
@@ -21,6 +21,7 @@ HypoSpace/
 │   └── kernel_library.py        # KernelLibrary — semver-versioned JSON persistence
 ├── data/
 │   ├── extractor.py             # ActivationExtractor — disk cache (SHA256 keys)
+│   ├── nnsight_extractor.py     # NNSightExtractor — live extraction via nnsight model tracing
 │   ├── preprocessor.py          # ActivationPreprocessor — max-abs normalization
 │   └── utils.py                 # utc_timestamp() helper
 ├── interpretability/
@@ -34,12 +35,14 @@ HypoSpace/
     ├── test_smoke.py            # E2E integration tests (4 tests)
     ├── test_contracts.py        # JSON payload structure contracts (2 tests)
     ├── test_regression.py       # Fixed mini-set regression + KPI guard (2 tests)
+    ├── test_nnsight.py          # nnsight live extraction tests (skipped if nnsight absent)
     └── fixtures/
         └── mini_regression_set.json
 ```
 
 ### Processing Pipeline
 
+**Path A — raw activations (existing):**
 ```
 raw_activations
   → ActivationExtractor   (disk cache, SHA256 key)
@@ -50,6 +53,16 @@ raw_activations
   → MechanisticAnalyzer   (50% ablation, effect size)
   → FaithfulnessChecker   (faithfulness + stability scores)
   → HypoSpaceResult
+```
+
+**Path B — live model extraction via nnsight:**
+```
+model_name + inputs + layer_path
+  → NNSightExtractor.extract()  (nnsight forward-pass trace)
+  → ActivationExtractor         (disk cache after extraction)
+  → ActivationPreprocessor (max-abs normalization)
+  → RealityDecoder → …          (same as Path A from here)
+  → DecodeResult
 ```
 
 ---
@@ -82,9 +95,40 @@ pytest -q
 pytest tests/test_smoke.py -v
 pytest tests/test_contracts.py -v
 pytest tests/test_regression.py -v
+
+# Run nnsight live-extraction tests (requires nnsight + torch to be installed)
+pytest tests/test_nnsight.py -v
 ```
 
 No build step required. No environment variables needed — all configuration is Python dataclasses.
+
+### nnsight live extraction
+
+`HypoSpaceAPI.decode_from_model()` extracts activations directly from a HuggingFace model:
+
+```python
+from api import HypoSpaceAPI
+from core.config import DecoderConfig, RuntimeConfig
+
+api = HypoSpaceAPI(config=DecoderConfig(top_k=8, runtime=RuntimeConfig(device="cpu")))
+
+result = api.decode_from_model(
+    model_name="gpt2",          # any HuggingFace model id
+    layer="layer_0",            # HypoSpace artifact name
+    layer_path="transformer.h.0",  # nnsight attribute path into the model
+    inputs="The quick brown fox",  # text or token ids
+    token_index=-1,             # which token position to extract (-1 = last)
+    version="0.1.0",
+)
+# result is a DecodeResult — pass to api.scorecard() for governance
+```
+
+`layer_path` uses dot-notation with integer segments for list indexing:
+- GPT-2: `"transformer.h.0"` (first transformer block)
+- LLaMA-style: `"model.layers.0"`
+- BERT-style: `"bert.encoder.layer.0"`
+
+The extracted tensor must have shape `(batch, seq_len, hidden_dim)` or `(seq_len, hidden_dim)`. Tuple outputs (e.g. `(hidden_states, past_key_values, ...)`) are handled automatically — the first element is used.
 
 ---
 
@@ -140,7 +184,7 @@ All data structures are `@dataclass(slots=True)` — do **not** add `__dict__`-b
 - One primary class per file; related dataclasses may share a file (see `config.py`)
 - `snake_case` for functions/variables/modules, `PascalCase` for classes, `UPPER_CASE` for module-level constants
 - Private helpers prefixed with `_` (e.g., `_intensity_band`, `_cache_key`)
-- Stdlib only in all modules except `viz/` (which uses Streamlit) and `tests/` (pytest)
+- Stdlib only in all modules except `viz/` (Streamlit), `data/nnsight_extractor.py` (nnsight + torch), and `tests/` (pytest)
 - JSON with UTF-8 encoding for all persisted artifacts
 - Timestamps always via `data.utils.utc_timestamp()` (UTC ISO format)
 
@@ -172,6 +216,7 @@ pytest -q          # All 8 tests should pass
 - `test_smoke.py` — Full E2E pipeline, semver loading, kernel match/merge, governance errors
 - `test_contracts.py` — Validates JSON payload keys/types for kernel artifacts and canvas output
 - `test_regression.py` — Parametrized against `tests/fixtures/mini_regression_set.json`; KPI guard requires ≥80% mechanistic coverage of top features
+- `test_nnsight.py` — Live extraction via `NNSightExtractor` and `decode_from_model()`; entire module is skipped when nnsight/torch are not installed
 
 Tests use `tmp_path` fixtures for isolation. Never modify `tests/fixtures/mini_regression_set.json` without updating expected outputs — this is the regression baseline.
 
@@ -186,7 +231,8 @@ Tests use `tmp_path` fixtures for isolation. Never modify `tests/fixtures/mini_r
 - Store new persisted data as JSON in `.hypo_cache/` following the existing manifest pattern
 
 **Don't:**
-- Add external dependencies to `core/`, `data/`, or `interpretability/` — these must remain stdlib-only during the MVP phase
+- Add external dependencies to `core/` or `interpretability/` — these must remain stdlib-only
+- Add external dependencies to `data/` except in `data/nnsight_extractor.py`, which is the designated optional-dependency module
 - Change `GovernanceConfig` defaults without updating `test_regression.py` fixture expectations
 - Use `__dict__` or `setattr` on slotted dataclasses
 - Create classes with inheritance hierarchies — the codebase uses composition
@@ -196,9 +242,11 @@ Tests use `tmp_path` fixtures for isolation. Never modify `tests/fixtures/mini_r
 
 ## Roadmap Context
 
-Planned post-MVP integrations (see `ROADMAP.md`):
+Completed post-MVP integrations:
+- **nnsight** — `NNSightExtractor` in `data/nnsight_extractor.py`; wired into `HypoSpaceAPI.decode_from_model()`
+
+Remaining post-MVP integrations (see `ROADMAP.md`):
 - **pyvene** — replace the 50% ablation stub in `MechanisticAnalyzer` with real interventions
-- **nnsight** — replace `ActivationExtractor` stub with live model hooks
 - **diskcache / joblib** — replace the hand-rolled activation cache in `data/extractor.py`
 - **CI/CD** — no GitHub Actions configured yet; add `.github/workflows/` when needed
 
