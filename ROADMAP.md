@@ -79,7 +79,7 @@ Backlog items shipped after MVP:
 | Integration | Status | Notes |
 |---|---|---|
 | nnsight live extraction | ✅ Done | `NNSightExtractor` in `data/nnsight_extractor.py`; wired into `HypoSpaceAPI.decode_from_model()` |
-| pyvene interventions | ✅ Done | `PyVeneInterventionRunner` in `data/pyvene_runner.py`; replaces stub in `MechanisticAnalyzer` |
+| pyvene interventions | ✅ Done | `PyVeneInterventionRunner` in `data/pyvene_runner.py`; provides real zero-ablation when torch is available; `MechanisticAnalyzer` 50% stub remains as CPU fallback |
 | diskcache / CI-CD | ✅ Done | GitHub Actions added; cache layer updated |
 
 ---

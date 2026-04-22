@@ -31,7 +31,7 @@ pip install -U pip pytest streamlit
 python main.py --diagnostics
 ```
 
-Prints a JSON report showing the status of every subsystem (config, preprocessor, hierarchy, kernel library, extractor, semantic, mechanistic, full pipeline) and which optional dependencies (torch, nnsight, pyvene, diskcache) are available. Useful before a first run or after environment changes.
+Prints a JSON report showing the status of every subsystem (config, preprocessor, hierarchy, kernel library, extractor, semantic, mechanistic, full pipeline, nnsight, pyvene) and which optional dependencies (torch, nnsight, pyvene, diskcache) are available. Useful before a first run or after environment changes.
 
 ### 3) Run the CLI demo
 
