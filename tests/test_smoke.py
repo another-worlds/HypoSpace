@@ -2,7 +2,8 @@ import pytest
 
 from api import HypoSpaceAPI
 from core.config import DecoderConfig, GovernanceConfig, RuntimeConfig
-from core.kernel_library import KernelLibrary
+from core.hierarchy import Feature
+from core.kernel_library import KernelLibrary, KernelTemplate
 from interpretability.faithfulness import GovernanceThresholdError
 
 
@@ -49,6 +50,44 @@ def test_kernel_match_and_merge(tmp_path) -> None:
     assert merged.metadata["merge_base_version"] == "0.1.0"
     assert merged.metadata["merge_candidate_version"] == "0.2.0"
     assert len(merged.features) >= len(first.features)
+
+
+def test_kernel_merge_semantics(tmp_path) -> None:
+    """merge() keeps the higher-scoring feature per source_index and includes candidate-only indices."""
+    lib = KernelLibrary(root=tmp_path / "lib")
+
+    base = KernelTemplate(
+        kernel_id="model-layer",
+        version="1.0.0",
+        model_name="model",
+        layer="layer",
+        features=[
+            Feature(id="layer:feature:0", layer="layer", score=0.9, source_index=0),  # shared, base wins
+            Feature(id="layer:feature:1", layer="layer", score=0.3, source_index=1),  # shared, candidate wins
+        ],
+    )
+    candidate = KernelTemplate(
+        kernel_id="model-layer",
+        version="2.0.0",
+        model_name="model",
+        layer="layer",
+        features=[
+            Feature(id="layer:feature:0", layer="layer", score=0.5, source_index=0),  # lower → base kept
+            Feature(id="layer:feature:1", layer="layer", score=0.8, source_index=1),  # higher → candidate wins
+            Feature(id="layer:feature:2", layer="layer", score=0.6, source_index=2),  # candidate-only → added
+        ],
+    )
+    lib.save(base)
+    lib.save(candidate)
+
+    merged = lib.merge("model-layer", base_version="1.0.0", candidate_version="2.0.0", merged_version="3.0.0")
+
+    by_index = {f.source_index: f for f in merged.features}
+    assert by_index[0].score == pytest.approx(0.9)   # base score was higher
+    assert by_index[1].score == pytest.approx(0.8)   # candidate score was higher
+    assert 2 in by_index                              # candidate-only index included
+    scores = [f.score for f in merged.features]
+    assert scores == sorted(scores, reverse=True)     # sorted descending
 
 
 def test_fail_on_low_confidence_raises(tmp_path) -> None:

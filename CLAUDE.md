@@ -245,7 +245,7 @@ Artifacts are stored under `.hypo_cache/` (configurable via `RuntimeConfig.cache
     └── <sha256_hex>.json            # Cached raw activations (keyed by content hash)
 ```
 
-**Kernel versioning:** Filenames follow `{model}-{layer}-{version}.json`. Versions are semver-sorted; `KernelLibrary.load_latest()` returns the highest version. `KernelLibrary.match()` computes cross-run feature overlap by `source_index`.
+**Kernel versioning:** Filenames follow `{model}-{layer}-{version}.json`. Versions are semver-sorted; `KernelLibrary.load_latest()` returns the highest version. `KernelLibrary.match()` computes cross-run feature overlap by `source_index`. `KernelLibrary.merge()` combines two versioned kernels: for each `source_index` present in both, the higher-scoring feature is kept; indices present only in the candidate are added. The result is saved as a new versioned artifact.
 
 ---
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict
+from typing import Dict
 
 
 @dataclass(slots=True)
@@ -31,4 +31,3 @@ class DecoderConfig:
     top_k: int = 8
     runtime: RuntimeConfig = field(default_factory=RuntimeConfig)
     governance: GovernanceConfig = field(default_factory=GovernanceConfig)
-    feature_flags: Dict[str, Any] = field(default_factory=dict)
