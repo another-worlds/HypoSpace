@@ -13,6 +13,7 @@ from interpretability.semantic import SemanticInterpreter
 
 if TYPE_CHECKING:
     from data.nnsight_extractor import NNSightExtractor
+    from diagnostics import DiagnosticsReport
 
 
 @dataclass(slots=True)
@@ -179,3 +180,7 @@ class HypoSpaceAPI:
             return runner.run_interventions(features, inputs, token_index)
         except ImportError:
             return self.mechanistic.run_interventions(features)
+
+    def diagnostics(self) -> DiagnosticsReport:
+        from diagnostics import run_diagnostics
+        return run_diagnostics()
