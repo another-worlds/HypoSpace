@@ -4,7 +4,7 @@
 
 HypoSpace is a Python 3.11+ model interpretability toolkit. It takes raw neural network activations and produces a structured "reality decode": top-k concept features ranked by magnitude, semantic auto-labels, mechanistic intervention checks, and a governance scorecard with configurable faithfulness/stability thresholds.
 
-Current stage: working E2E skeleton with CLI, Streamlit UI, full test suite, and **nnsight live extraction** via `HypoSpaceAPI.decode_from_model()`. The heavy SAE backend (pyvene) is planned for a later stage.
+Current stage: working E2E skeleton with CLI, Streamlit UI, full test suite, **nnsight live extraction** via `HypoSpaceAPI.decode_from_model()`, and **pyvene zero-ablation interventions** via `PyVeneInterventionRunner`.
 
 ---
 
@@ -28,7 +28,7 @@ HypoSpace/
 │   └── utils.py                 # utc_timestamp() helper
 ├── interpretability/
 │   ├── semantic.py              # SemanticInterpreter — intensity-band auto-labels
-│   ├── mechanistic.py           # MechanisticAnalyzer — 50% ablation interventions
+│   ├── mechanistic.py           # MechanisticAnalyzer — synthetic 50% ablation stub (CPU fallback; real zero-ablation in PyVeneInterventionRunner)
 │   └── faithfulness.py          # FaithfulnessChecker, GovernanceScorecard, GovernanceThresholdError
 ├── viz/
 │   ├── streamlit_app.py         # Streamlit 3-tab interactive UI
@@ -36,9 +36,10 @@ HypoSpace/
 └── tests/
     ├── test_smoke.py            # E2E integration tests (4 tests)
     ├── test_contracts.py        # JSON payload structure contracts (2 tests)
-    ├── test_regression.py       # Fixed mini-set regression + KPI guard (2 tests)
-    ├── test_nnsight.py          # nnsight live extraction tests (skipped if nnsight absent)
-    ├── test_diagnostics.py      # diagnostics module tests (30 tests)
+    ├── test_regression.py       # Fixed mini-set regression + KPI guard (10 tests: 9 fixture cases + 1 KPI guard)
+    ├── test_nnsight.py          # nnsight live extraction tests (11 tests; skipped if nnsight/torch absent)
+    ├── test_pyvene.py           # PyVeneInterventionRunner tests (8 tests; skipped if torch absent)
+    ├── test_diagnostics.py      # diagnostics module tests (23 tests)
     └── fixtures/
         └── mini_regression_set.json
 ```
@@ -53,7 +54,7 @@ raw_activations
   → RealityDecoder → HierarchyEngine  (top-k by magnitude)
   → KernelLibrary         (save artifact, compute cross-run match rate)
   → SemanticInterpreter   (intensity-band labels)
-  → MechanisticAnalyzer   (50% ablation, effect size)
+  → MechanisticAnalyzer   (synthetic 50% stub) or PyVeneInterventionRunner (real zero-ablation, when torch available)
   → FaithfulnessChecker   (faithfulness + stability scores)
   → HypoSpaceResult
 ```
@@ -105,6 +106,9 @@ pytest tests/test_diagnostics.py -v
 
 # Run nnsight live-extraction tests (requires nnsight + torch to be installed)
 pytest tests/test_nnsight.py -v
+
+# Run pyvene intervention tests (requires torch to be installed)
+pytest tests/test_pyvene.py -v
 ```
 
 No build step required. No environment variables needed — all configuration is Python dataclasses.
@@ -223,7 +227,7 @@ All data structures are `@dataclass(slots=True)` — do **not** add `__dict__`-b
 - One primary class per file; related dataclasses may share a file (see `config.py`)
 - `snake_case` for functions/variables/modules, `PascalCase` for classes, `UPPER_CASE` for module-level constants
 - Private helpers prefixed with `_` (e.g., `_intensity_band`, `_cache_key`)
-- Stdlib only in all modules except `viz/` (Streamlit), `data/nnsight_extractor.py` (nnsight + torch), and `tests/` (pytest)
+- Stdlib only in all modules except `viz/` (Streamlit), `data/nnsight_extractor.py` (nnsight + torch), `data/pyvene_runner.py` (pyvene + torch), and `tests/` (pytest)
 - JSON with UTF-8 encoding for all persisted artifacts
 - Timestamps always via `data.utils.utc_timestamp()` (UTC ISO format)
 
@@ -256,7 +260,8 @@ pytest -q          # All tests should pass (39 pass, nnsight/pyvene tests skippe
 - `test_contracts.py` — Validates JSON payload keys/types for kernel artifacts and canvas output
 - `test_regression.py` — Parametrized against `tests/fixtures/mini_regression_set.json`; KPI guard requires ≥80% mechanistic coverage of top features
 - `test_nnsight.py` — Live extraction via `NNSightExtractor` and `decode_from_model()`; entire module is skipped when nnsight/torch are not installed
-- `test_diagnostics.py` — 30 tests covering all 10 probes in `diagnostics.py`, JSON serializability, CLI flag, and `HypoSpaceAPI.diagnostics()`
+- `test_pyvene.py` — `PyVeneInterventionRunner` hook-fallback path and effect-size correctness; entire module is skipped when torch is not installed
+- `test_diagnostics.py` — 23 tests covering all 10 probes in `diagnostics.py`, JSON serializability, CLI flag, and `HypoSpaceAPI.diagnostics()`
 
 Tests use `tmp_path` fixtures for isolation. Never modify `tests/fixtures/mini_regression_set.json` without updating expected outputs — this is the regression baseline.
 
@@ -272,7 +277,7 @@ Tests use `tmp_path` fixtures for isolation. Never modify `tests/fixtures/mini_r
 
 **Don't:**
 - Add external dependencies to `core/` or `interpretability/` — these must remain stdlib-only
-- Add external dependencies to `data/` except in `data/nnsight_extractor.py`, which is the designated optional-dependency module
+- Add external dependencies to `data/` except in `data/nnsight_extractor.py` (nnsight + torch) and `data/pyvene_runner.py` (pyvene + torch), which are the designated optional-dependency modules
 - Change `GovernanceConfig` defaults without updating `test_regression.py` fixture expectations
 - Use `__dict__` or `setattr` on slotted dataclasses
 - Create classes with inheritance hierarchies — the codebase uses composition
@@ -285,10 +290,8 @@ Tests use `tmp_path` fixtures for isolation. Never modify `tests/fixtures/mini_r
 
 Completed post-MVP integrations:
 - **nnsight** — `NNSightExtractor` in `data/nnsight_extractor.py`; wired into `HypoSpaceAPI.decode_from_model()`
-
-Remaining post-MVP integrations (see `ROADMAP.md`):
-- **pyvene** — replace the 50% ablation stub in `MechanisticAnalyzer` with real interventions
-- **diskcache / joblib** — replace the hand-rolled activation cache in `data/extractor.py`
-- **CI/CD** — no GitHub Actions configured yet; add `.github/workflows/` when needed
+- **pyvene** — `PyVeneInterventionRunner` in `data/pyvene_runner.py`; provides real zero-ablation interventions when torch is available; `MechanisticAnalyzer` remains as the CPU fallback stub
+- **diskcache** — optional `diskcache.Cache` backend in `data/extractor.py` with JSON fallback when unavailable
+- **CI/CD** — GitHub Actions configured in `.github/workflows/`
 
 KPIs to maintain: time-to-first-insight, concept consistency across runs (cross-run match rate), faithfulness coverage (≥80% of top features have mechanistic checks), CPU viability.
