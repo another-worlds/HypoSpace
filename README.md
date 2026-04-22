@@ -25,7 +25,15 @@ source .venv/bin/activate
 pip install -U pip pytest streamlit
 ```
 
-### 2) Run the CLI demo
+### 2) Check subsystem health
+
+```bash
+python main.py --diagnostics
+```
+
+Prints a JSON report showing the status of every subsystem (config, preprocessor, hierarchy, kernel library, extractor, semantic, mechanistic, full pipeline) and which optional dependencies (torch, nnsight, pyvene, diskcache) are available. Useful before a first run or after environment changes.
+
+### 3) Run the CLI demo
 
 ```bash
 python main.py --model demo-model --layer layer_0 --activations 0.1,0.4,-0.2,0.8 --top-k 4
@@ -33,7 +41,7 @@ python main.py --model demo-model --layer layer_0 --activations 0.1,0.4,-0.2,0.8
 
 The command writes kernel artifacts into `.hypo_cache/` by default.
 
-### 3) Launch the Streamlit UI
+### 4) Launch the Streamlit UI
 
 ```bash
 streamlit run viz/streamlit_app.py
@@ -44,7 +52,7 @@ MVP tabs:
 - Semantic Canvas
 - Mechanistic Probes + Governance
 
-### 4) Run tests
+### 5) Run tests
 
 ```bash
 pytest -q
@@ -65,6 +73,7 @@ In short: faster time-to-first-insight, stronger interpretability evidence, and 
 The current project is organized as follows:
 
 - `api.py` — top-level `HypoSpaceAPI` façade that orchestrates decode + score workflows.
+- `diagnostics.py` — `run_diagnostics()` entry point; probes each subsystem independently and returns a `DiagnosticsReport`. Also accessible as `HypoSpaceAPI.diagnostics()` or `python main.py --diagnostics`.
 - `core/`
   - `config.py` — runtime/decoder/governance configuration models.
   - `decoder.py` — decode pipeline entrypoint.
