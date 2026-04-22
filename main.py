@@ -19,12 +19,21 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-stability", type=float, default=0.60, help="Stability threshold")
     parser.add_argument("--fail-on-low-confidence", action="store_true", help="Fail command if governance thresholds are not met")
     parser.add_argument("--version", default="0.1.0", help="Kernel version tag")
+    parser.add_argument("--diagnostics", action="store_true", help="Run deep diagnostics and print JSON report; ignores all other flags")
     return parser
 
 
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
+
+    if args.diagnostics:
+        import dataclasses
+        from diagnostics import run_diagnostics
+        report = run_diagnostics()
+        print(json.dumps(dataclasses.asdict(report), ensure_ascii=False, indent=2))
+        raise SystemExit(0)
+
     raw_activations = [float(v.strip()) for v in args.activations.split(",") if v.strip()]
 
     config = DecoderConfig(
