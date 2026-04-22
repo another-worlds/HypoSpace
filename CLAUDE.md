@@ -14,6 +14,7 @@ Current stage: working E2E skeleton with CLI, Streamlit UI, full test suite, and
 HypoSpace/
 ├── api.py                        # HypoSpaceAPI — public one-call façade
 ├── main.py                       # CLI entrypoint (argparse, JSON output)
+├── diagnostics.py                # run_diagnostics() — per-subsystem health probes, DiagnosticsReport
 ├── core/
 │   ├── config.py                # DecoderConfig, RuntimeConfig, GovernanceConfig
 │   ├── decoder.py               # RealityDecoder — orchestrates the decode pipeline
@@ -23,6 +24,7 @@ HypoSpace/
 │   ├── extractor.py             # ActivationExtractor — disk cache (SHA256 keys)
 │   ├── nnsight_extractor.py     # NNSightExtractor — live extraction via nnsight model tracing
 │   ├── preprocessor.py          # ActivationPreprocessor — max-abs normalization
+│   ├── pyvene_runner.py         # PyVeneInterventionRunner — real zero-ablation via pyvene/hooks
 │   └── utils.py                 # utc_timestamp() helper
 ├── interpretability/
 │   ├── semantic.py              # SemanticInterpreter — intensity-band auto-labels
@@ -36,6 +38,7 @@ HypoSpace/
     ├── test_contracts.py        # JSON payload structure contracts (2 tests)
     ├── test_regression.py       # Fixed mini-set regression + KPI guard (2 tests)
     ├── test_nnsight.py          # nnsight live extraction tests (skipped if nnsight absent)
+    ├── test_diagnostics.py      # diagnostics module tests (30 tests)
     └── fixtures/
         └── mini_regression_set.json
 ```
@@ -85,6 +88,9 @@ python main.py \
   --version 0.1.0
   # --fail-on-low-confidence   (exit code 2 if thresholds not met)
 
+# Run deep subsystem diagnostics (no other flags needed)
+python main.py --diagnostics
+
 # Launch the Streamlit UI
 streamlit run viz/streamlit_app.py
 
@@ -95,6 +101,7 @@ pytest -q
 pytest tests/test_smoke.py -v
 pytest tests/test_contracts.py -v
 pytest tests/test_regression.py -v
+pytest tests/test_diagnostics.py -v
 
 # Run nnsight live-extraction tests (requires nnsight + torch to be installed)
 pytest tests/test_nnsight.py -v
@@ -201,6 +208,10 @@ All data structures are `@dataclass(slots=True)` — do **not** add `__dict__`-b
 | `InterventionResult` | `interpretability/mechanistic.py` | `feature_id`, `baseline`, `ablated`, `effect_size` |
 | `GovernanceScorecard` | `interpretability/faithfulness.py` | `faithfulness_score`, `stability_score`, `risk_flag`, `passes_thresholds` |
 | `HypoSpaceResult` | `api.py` | Top-level result: `.decode` + `.scorecard` |
+| `CheckDetail` | `diagnostics.py` | One assertion within a probe: `name`, `passed`, `detail` |
+| `ProbeResult` | `diagnostics.py` | Outcome of a single subsystem probe: `subsystem`, `status`, `latency_ms`, `checks[]`, `warnings[]`, `errors[]` |
+| `DependencyStatus` | `diagnostics.py` | Optional-dependency availability: `name`, `available`, `note` |
+| `DiagnosticsReport` | `diagnostics.py` | Full health report: `schema_version`, `generated_at_utc`, `overall_status`, `dependencies[]`, `probes[]` |
 
 ---
 
@@ -237,7 +248,7 @@ Artifacts are stored under `.hypo_cache/` (configurable via `RuntimeConfig.cache
 ## Testing
 
 ```bash
-pytest -q          # All 8 tests should pass
+pytest -q          # All tests should pass (39 pass, nnsight/pyvene tests skipped when deps absent)
 ```
 
 **Test modules:**
@@ -245,6 +256,7 @@ pytest -q          # All 8 tests should pass
 - `test_contracts.py` — Validates JSON payload keys/types for kernel artifacts and canvas output
 - `test_regression.py` — Parametrized against `tests/fixtures/mini_regression_set.json`; KPI guard requires ≥80% mechanistic coverage of top features
 - `test_nnsight.py` — Live extraction via `NNSightExtractor` and `decode_from_model()`; entire module is skipped when nnsight/torch are not installed
+- `test_diagnostics.py` — 30 tests covering all 10 probes in `diagnostics.py`, JSON serializability, CLI flag, and `HypoSpaceAPI.diagnostics()`
 
 Tests use `tmp_path` fixtures for isolation. Never modify `tests/fixtures/mini_regression_set.json` without updating expected outputs — this is the regression baseline.
 
@@ -264,7 +276,8 @@ Tests use `tmp_path` fixtures for isolation. Never modify `tests/fixtures/mini_r
 - Change `GovernanceConfig` defaults without updating `test_regression.py` fixture expectations
 - Use `__dict__` or `setattr` on slotted dataclasses
 - Create classes with inheritance hierarchies — the codebase uses composition
-- Change the CLI's exit code contract: `0` = success, `2` = `GovernanceThresholdError`
+- Change the CLI's exit code contract: `0` = success, `2` = `GovernanceThresholdError`; `--diagnostics` also exits `0`
+- Add probes to `diagnostics.py` that trigger network I/O or model downloads — probes must complete in < 100 ms on CPU with no external calls
 
 ---
 
