@@ -272,10 +272,8 @@ Tests use `tmp_path` fixtures for isolation. Never modify `tests/fixtures/mini_r
 
 Completed post-MVP integrations:
 - **nnsight** — `NNSightExtractor` in `data/nnsight_extractor.py`; wired into `HypoSpaceAPI.decode_from_model()`
-
-Remaining post-MVP integrations (see `ROADMAP.md`):
-- **pyvene** — replace the 50% ablation stub in `MechanisticAnalyzer` with real interventions
-- **diskcache / joblib** — replace the hand-rolled activation cache in `data/extractor.py`
-- **CI/CD** — no GitHub Actions configured yet; add `.github/workflows/` when needed
+- **pyvene** — `PyVeneInterventionRunner` in `data/pyvene_runner.py`; zero-ablation with PyTorch hook fallback; wired into `HypoSpaceAPI._run_real_interventions()`
+- **diskcache** — `data/extractor.py` uses diskcache when installed, falls back to hand-rolled JSON cache
+- **CI/CD** — `.github/workflows/ci.yml` with three jobs: stdlib, diskcache, and torch (pyvene hook-fallback)
 
 KPIs to maintain: time-to-first-insight, concept consistency across runs (cross-run match rate), faithfulness coverage (≥80% of top features have mechanistic checks), CPU viability.
