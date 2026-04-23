@@ -53,5 +53,211 @@
     "expected_faithfulness": 0.444444,
     "expected_stability": 0.875,
     "expected_risk_flag": "low_faithfulness"
+  },
+  {
+    "model": "demo",
+    "layer": "layer_r2",
+    "activations": [
+      0.2,
+      0.8,
+      0.5,
+      0.1
+    ],
+    "top_k": 1,
+    "expected_indices": [
+      1
+    ],
+    "expected_scores": [
+      1.0
+    ],
+    "expected_labels": [
+      "high-intensity concept around activation index 1"
+    ],
+    "expected_faithfulness": 0.5,
+    "expected_stability": 1.0,
+    "expected_risk_flag": "low_faithfulness"
+  },
+  {
+    "model": "demo",
+    "layer": "layer_r3",
+    "activations": [
+      -0.5,
+      0.3,
+      -0.9,
+      0.1
+    ],
+    "top_k": 2,
+    "expected_indices": [
+      2,
+      0
+    ],
+    "expected_scores": [
+      1.0,
+      0.555556
+    ],
+    "expected_labels": [
+      "high-intensity concept around activation index 2",
+      "medium-intensity concept around activation index 0"
+    ],
+    "expected_faithfulness": 0.388889,
+    "expected_stability": 0.714286,
+    "expected_risk_flag": "low_faithfulness"
+  },
+  {
+    "model": "demo",
+    "layer": "layer_r4",
+    "activations": [
+      0.6,
+      -0.3,
+      0.9,
+      0.0,
+      -0.75,
+      0.45
+    ],
+    "top_k": 3,
+    "expected_indices": [
+      2,
+      4,
+      0
+    ],
+    "expected_scores": [
+      1.0,
+      0.833333,
+      0.666667
+    ],
+    "expected_labels": [
+      "high-intensity concept around activation index 2",
+      "high-intensity concept around activation index 4",
+      "medium-intensity concept around activation index 0"
+    ],
+    "expected_faithfulness": 0.416667,
+    "expected_stability": 0.836701,
+    "expected_risk_flag": "low_faithfulness"
+  },
+  {
+    "model": "demo",
+    "layer": "layer_r5",
+    "activations": [
+      0.1,
+      -0.6,
+      0.85,
+      0.3,
+      -0.55,
+      0.7,
+      -0.2,
+      0.95
+    ],
+    "top_k": 4,
+    "expected_indices": [
+      7,
+      2,
+      5,
+      1
+    ],
+    "expected_scores": [
+      1.0,
+      0.894737,
+      0.736842,
+      0.631579
+    ],
+    "expected_labels": [
+      "high-intensity concept around activation index 7",
+      "high-intensity concept around activation index 2",
+      "medium-intensity concept around activation index 5",
+      "medium-intensity concept around activation index 1"
+    ],
+    "expected_faithfulness": 0.407895,
+    "expected_stability": 0.826285,
+    "expected_risk_flag": "low_faithfulness"
+  },
+  {
+    "model": "demo",
+    "layer": "layer_r6",
+    "activations": [
+      0.5,
+      -0.5,
+      0.5
+    ],
+    "top_k": 2,
+    "expected_indices": [
+      0,
+      1
+    ],
+    "expected_scores": [
+      1.0,
+      1.0
+    ],
+    "expected_labels": [
+      "high-intensity concept around activation index 0",
+      "high-intensity concept around activation index 1"
+    ],
+    "expected_faithfulness": 0.5,
+    "expected_stability": 1.0,
+    "expected_risk_flag": "low_faithfulness"
+  },
+  {
+    "model": "demo",
+    "layer": "layer_r7",
+    "activations": [
+      0.3,
+      -0.7,
+      0.5,
+      -0.9,
+      0.1
+    ],
+    "top_k": 5,
+    "expected_indices": [
+      3,
+      1,
+      2,
+      0,
+      4
+    ],
+    "expected_scores": [
+      1.0,
+      0.777778,
+      0.555556,
+      0.333333,
+      0.111111
+    ],
+    "expected_labels": [
+      "high-intensity concept around activation index 3",
+      "medium-intensity concept around activation index 1",
+      "medium-intensity concept around activation index 2",
+      "low-intensity concept around activation index 0",
+      "low-intensity concept around activation index 4"
+    ],
+    "expected_faithfulness": 0.277778,
+    "expected_stability": 0.434315,
+    "expected_risk_flag": "low_faithfulness"
+  },
+  {
+    "model": "demo",
+    "layer": "layer_r8",
+    "activations": [
+      0.25,
+      -0.75,
+      0.5,
+      -0.25
+    ],
+    "top_k": 3,
+    "expected_indices": [
+      1,
+      2,
+      0
+    ],
+    "expected_scores": [
+      1.0,
+      0.666667,
+      0.333333
+    ],
+    "expected_labels": [
+      "high-intensity concept around activation index 1",
+      "medium-intensity concept around activation index 2",
+      "low-intensity concept around activation index 0"
+    ],
+    "expected_faithfulness": 0.333333,
+    "expected_stability": 0.591752,
+    "expected_risk_flag": "low_faithfulness"
   }
 ]
