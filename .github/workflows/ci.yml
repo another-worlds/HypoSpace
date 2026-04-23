@@ -22,7 +22,7 @@ jobs:
         run: pip install pytest
 
       - name: Run stdlib-only tests
-        run: pytest tests/test_smoke.py tests/test_contracts.py tests/test_regression.py -v
+        run: pytest tests/test_smoke.py tests/test_contracts.py tests/test_regression.py tests/test_diagnostics.py -v
 
   test-with-diskcache:
     runs-on: ubuntu-latest
@@ -39,4 +39,4 @@ jobs:
         run: pip install pytest diskcache
 
       - name: Run stdlib-only tests with diskcache backend
-        run: pytest tests/test_smoke.py tests/test_contracts.py tests/test_regression.py -v
+        run: pytest tests/test_smoke.py tests/test_contracts.py tests/test_regression.py tests/test_diagnostics.py -v

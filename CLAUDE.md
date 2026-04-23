@@ -34,7 +34,7 @@ HypoSpace/
 │   ├── streamlit_app.py         # Streamlit 3-tab interactive UI
 │   └── canvas.py                # SemanticCanvas — feature points and nearest-neighbor edges
 └── tests/
-    ├── test_smoke.py            # E2E integration tests (4 tests)
+    ├── test_smoke.py            # E2E integration tests (5 tests)
     ├── test_contracts.py        # JSON payload structure contracts (2 tests)
     ├── test_regression.py       # Fixed mini-set regression + KPI guard (10 tests: 9 fixture cases + 1 KPI guard)
     ├── test_nnsight.py          # nnsight live extraction tests (11 tests; skipped if nnsight/torch absent)
@@ -252,7 +252,7 @@ Artifacts are stored under `.hypo_cache/` (configurable via `RuntimeConfig.cache
 ## Testing
 
 ```bash
-pytest -q          # All tests should pass (39 pass, nnsight/pyvene tests skipped when deps absent)
+pytest -q          # All tests should pass (47 pass, nnsight/pyvene tests skipped when deps absent)
 ```
 
 **Test modules:**

@@ -15,7 +15,7 @@ class InterventionResult:
 
 
 class MechanisticAnalyzer:
-    """Placeholder pyvene-compatible mechanistic checks."""
+    """CPU-only 50% ablation stub. Use PyVeneInterventionRunner for real zero-ablation when torch is available."""
 
     def run_interventions(self, features: Iterable[Feature]) -> List[InterventionResult]:
         rows: List[InterventionResult] = []
