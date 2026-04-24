@@ -252,7 +252,7 @@ Artifacts are stored under `.hypo_cache/` (configurable via `RuntimeConfig.cache
 ## Testing
 
 ```bash
-pytest -q          # All tests should pass (47 pass, nnsight/pyvene tests skipped when deps absent)
+pytest -q          # 32 stdlib-only tests always pass; 51 total when nnsight + torch + pyvene installed
 ```
 
 **Test modules:**
@@ -277,7 +277,7 @@ Tests use `tmp_path` fixtures for isolation. Never modify `tests/fixtures/mini_r
 
 **Don't:**
 - Add external dependencies to `core/` or `interpretability/` — these must remain stdlib-only
-- Add external dependencies to `data/` except in `data/nnsight_extractor.py` (nnsight + torch) and `data/pyvene_runner.py` (pyvene + torch), which are the designated optional-dependency modules
+- Add external dependencies to `data/` except in `data/nnsight_extractor.py` (nnsight + torch), `data/pyvene_runner.py` (pyvene + torch), and `data/extractor.py` (diskcache — optional, with JSON fallback), which are the designated optional-dependency modules
 - Change `GovernanceConfig` defaults without updating `test_regression.py` fixture expectations
 - Use `__dict__` or `setattr` on slotted dataclasses
 - Create classes with inheritance hierarchies — the codebase uses composition
