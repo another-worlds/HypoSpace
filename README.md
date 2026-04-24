@@ -119,7 +119,7 @@ The current project is organized as follows:
   - `streamlit_app.py` — interactive MVP UI.
   - `canvas.py` — visualization helpers for concept relationships.
 - `main.py` — CLI entrypoint for decode-and-score execution.
-- `tests/` — smoke, contract, and regression coverage for MVP behavior.
+- `tests/` — smoke, contract, regression, diagnostics, nnsight, and pyvene coverage (nnsight/pyvene modules skipped when optional deps absent).
 
 ### Request/Processing Flow
 
