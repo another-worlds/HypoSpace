@@ -18,7 +18,6 @@ class RuntimeConfig:
     """Runtime controls for CPU/GPU execution profiles."""
 
     device: str = "cpu"
-    batch_size: int = 1  # ISSUE-M07: never read by any component — wire into NNSightExtractor or remove
     max_features: int = 2048
     cache_dir: str = ".hypo_cache"
 

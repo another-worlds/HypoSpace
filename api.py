@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Iterable, Union
 
 from core.config import DecoderConfig
 from core.decoder import DecodeResult, RealityDecoder
+from core.hierarchy import Feature
 from data.extractor import ActivationExtractor
 from data.preprocessor import ActivationPreprocessor
 from interpretability.faithfulness import FaithfulnessChecker, GovernanceScorecard
@@ -39,6 +40,12 @@ class HypoSpaceAPI:
     # Path A — raw activations
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _check_finite(values: list[float]) -> None:
+        bad = [v for v in values if v != v or v == float("inf") or v == float("-inf")]
+        if bad:
+            raise ValueError(f"raw_activations contains non-finite values: {bad[:3]!r}")
+
     def decode(
         self,
         model_name: str,
@@ -46,9 +53,11 @@ class HypoSpaceAPI:
         raw_activations: Iterable[float],
         version: str = "0.1.0",
     ) -> DecodeResult:
+        floats = [float(v) for v in raw_activations]
+        self._check_finite(floats)
         values = self.preprocessor.normalize(
             self.extractor.extract(
-                raw_activations,
+                floats,
                 model_name=model_name,
                 layer=layer,
             )
@@ -61,10 +70,12 @@ class HypoSpaceAPI:
         self,
         result: DecodeResult,
         interventions: list[InterventionResult] | None = None,
+        intervention_method: str = "unknown",
     ) -> GovernanceScorecard:
         if interventions is None:
             interventions = self.mechanistic.run_interventions(result.features)
-        return self.faithfulness.evaluate(interventions)
+            intervention_method = "stub-50pct"
+        return self.faithfulness.evaluate(interventions, intervention_method=intervention_method)
 
     def decode_and_score(
         self,
@@ -147,7 +158,7 @@ class HypoSpaceAPI:
             token_index=token_index,
             version=version,
         )
-        interventions = self._run_real_interventions(
+        interventions, method = self._run_real_interventions(
             features=decode_result.features,
             model_name=model_name,
             layer_path=layer_path,
@@ -156,18 +167,21 @@ class HypoSpaceAPI:
         )
         return HypoSpaceResult(
             decode=decode_result,
-            scorecard=self.scorecard(decode_result, interventions=interventions),
+            scorecard=self.scorecard(decode_result, interventions=interventions, intervention_method=method),
         )
 
     def _run_real_interventions(
         self,
-        features: list,  # ISSUE-M06: should be List[Feature]
+        features: list[Feature],
         model_name: str,
         layer_path: str,
         inputs: Union[str, Iterable[int]],
         token_index: int,
-    ) -> list[InterventionResult]:
-        """Attempt real interventions via PyVeneInterventionRunner; fall back to stub."""
+    ) -> tuple[list[InterventionResult], str]:
+        """Attempt real interventions via PyVeneInterventionRunner; fall back to stub.
+
+        Returns (interventions, intervention_method) so callers can record provenance.
+        """
         try:
             from data.pyvene_runner import PyVeneInterventionRunner
             import torch  # noqa: F401
@@ -177,9 +191,9 @@ class HypoSpaceAPI:
                 layer_path=layer_path,
                 device=self.config.runtime.device,
             )
-            return runner.run_interventions(features, inputs, token_index)
+            return runner.run_interventions(features, inputs, token_index), "pyvene-zero-ablation"
         except ImportError:
-            return self.mechanistic.run_interventions(features)
+            return self.mechanistic.run_interventions(features), "stub-50pct"
 
     def diagnostics(self) -> DiagnosticsReport:
         from diagnostics import run_diagnostics

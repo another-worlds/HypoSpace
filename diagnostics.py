@@ -211,14 +211,12 @@ def _probe_hierarchy(tmp_dir: Path) -> ProbeResult:
             if not scores_no_nan:
                 errors.append("NaN/inf found in feature scores")
 
-        zero_k_features = engine.extract_features([0.5, -0.3], layer="diag-layer", top_k=0)
-        zero_k_ok = len(zero_k_features) >= 1
-        zero_k_note = f"top_k=0 returns {len(zero_k_features)} feature(s) — silently promoted to 1"
-        checks.append(CheckDetail("top_k_zero_guard", zero_k_ok, zero_k_note))
-        if not zero_k_ok:
-            errors.append("HierarchyEngine returned 0 features for top_k=0 input")
-        else:
-            warnings.append("top_k=0 is silently promoted to 1 — no explicit input validation in HierarchyEngine")
+        try:
+            engine.extract_features([0.5, -0.3], layer="diag-layer", top_k=0)
+            checks.append(CheckDetail("top_k_zero_guard", False, "top_k=0 did not raise — input not validated"))
+            warnings.append("top_k=0 was not rejected; HierarchyEngine should raise ValueError for non-positive top_k")
+        except ValueError:
+            checks.append(CheckDetail("top_k_zero_guard", True, "top_k=0 correctly raises ValueError"))
 
         empty_features = engine.extract_features([], layer="diag-layer", top_k=4)
         checks.append(CheckDetail("empty_input_returns_empty", empty_features == [], f"got {len(empty_features)} features"))
@@ -373,7 +371,7 @@ def _probe_extractor(tmp_dir: Path) -> ProbeResult:
         if not dc_used:
             warnings.append("diskcache unavailable — using plain JSON cache (collision risk at scale)")
 
-        key = ex._cache_key([0.1, 0.5], "diag", "L0")
+        key = ex._cache_key([0.1, 0.5])
         key_ok = isinstance(key, str) and len(key) == 16
         checks.append(CheckDetail("cache_key_length", key_ok, f"key='{key}' ({len(key)} chars)"))
         if not key_ok:

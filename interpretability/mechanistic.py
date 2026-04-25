@@ -17,8 +17,8 @@ class InterventionResult:
 class MechanisticAnalyzer:
     """CPU-only 50% ablation stub. Use PyVeneInterventionRunner for real zero-ablation when torch is available."""
 
-    # ISSUE-M03: result fields match real pyvene output but values are synthetic (baseline * 0.5); no provenance flag
     def run_interventions(self, features: Iterable[Feature]) -> List[InterventionResult]:
+        """Return synthetic intervention results (ablated = baseline * 0.5, effect_size always baseline / 2)."""
         rows: List[InterventionResult] = []
         for feature in features:
             baseline = feature.score

@@ -7,16 +7,22 @@ on:
     branches: ["**"]
 
 jobs:
+  # ------------------------------------------------------------------ #
+  # Core stdlib tests across Python versions (CI01 partially, CI02)     #
+  # ------------------------------------------------------------------ #
   test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ matrix.python-version }}
 
       - name: Install test dependencies
         run: pip install pytest
@@ -24,6 +30,13 @@ jobs:
       - name: Run stdlib-only tests
         run: pytest tests/test_smoke.py tests/test_contracts.py tests/test_regression.py tests/test_diagnostics.py -v
 
+      - name: Validate CLI exit code contract (CI05)
+        run: |
+          python main.py --model demo --layer l --activations 0.1,0.2 --min-faithfulness 0.99 --fail-on-low-confidence; [ $? -eq 2 ]
+
+  # ------------------------------------------------------------------ #
+  # Optional diskcache backend                                          #
+  # ------------------------------------------------------------------ #
   test-with-diskcache:
     runs-on: ubuntu-latest
 
@@ -40,3 +53,43 @@ jobs:
 
       - name: Run stdlib-only tests with diskcache backend
         run: pytest tests/test_smoke.py tests/test_contracts.py tests/test_regression.py tests/test_diagnostics.py -v
+
+  # ------------------------------------------------------------------ #
+  # Torch-only tests — covers test_pyvene.py (CI01 partial)            #
+  # ------------------------------------------------------------------ #
+  test-with-torch:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install torch (CPU) and pytest
+        run: pip install pytest torch --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Run stdlib + pyvene tests
+        run: pytest tests/test_smoke.py tests/test_contracts.py tests/test_regression.py tests/test_diagnostics.py tests/test_pyvene.py -v
+
+  # ------------------------------------------------------------------ #
+  # Linting (CI03)                                                      #
+  # ------------------------------------------------------------------ #
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Lint
+        run: ruff check .

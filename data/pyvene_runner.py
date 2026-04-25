@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Iterable, List, Union
 
 from core.hierarchy import Feature
+from data.utils import resolve_layer
 from interpretability.mechanistic import InterventionResult
 
 
@@ -119,7 +120,7 @@ class PyVeneInterventionRunner:
         import torch
 
         hf_model = self.lm.model
-        layer_module = _resolve_layer(hf_model, self.layer_path)
+        layer_module = resolve_layer(hf_model, self.layer_path)
         layer_index = _layer_index(self.layer_path)
 
         config = pv.IntervenableConfig(
@@ -158,7 +159,7 @@ class PyVeneInterventionRunner:
         import torch
 
         hf_model = self.lm.model
-        layer_module = _resolve_layer(hf_model, self.layer_path)
+        layer_module = resolve_layer(hf_model, self.layer_path)
 
         def _zero_dim(module: object, input: object, output: object) -> object:
             if isinstance(output, tuple):
@@ -181,15 +182,6 @@ class PyVeneInterventionRunner:
         if logits.dim() == 3:
             logits = logits[0]
         return logits[-1]
-
-
-# ISSUE-M01: verbatim copy of nnsight_extractor._resolve_layer — consolidate in data/utils.py
-def _resolve_layer(model: object, layer_path: str) -> object:
-    """Navigate a model's attribute tree by dot-separated path (integer = index)."""
-    node = model
-    for part in layer_path.split("."):
-        node = node[int(part)] if part.isdigit() else getattr(node, part)
-    return node
 
 
 def _layer_index(layer_path: str) -> int:
