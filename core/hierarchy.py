@@ -32,7 +32,9 @@ class HierarchyEngine:
             return []
 
         ranked = sorted(enumerate(values), key=lambda x: abs(x[1]), reverse=True)
-        selected = ranked[: max(1, top_k)]
+        if top_k <= 0:
+            raise ValueError(f"top_k must be a positive integer, got {top_k!r}")
+        selected = ranked[:top_k]
         return [
             Feature(
                 id=f"{layer}:feature:{rank}",

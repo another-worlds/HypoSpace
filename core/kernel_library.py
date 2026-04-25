@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 import json
 from pathlib import Path
+import threading
 from typing import Dict, Iterable, List, Tuple
 
 from core.hierarchy import Feature
@@ -24,6 +25,7 @@ class KernelLibrary:
     """Persistent storage for kernel templates."""
 
     MANIFEST_NAME = "manifest.json"
+    _manifest_lock: threading.Lock = threading.Lock()
 
     def __init__(self, root: str | Path = ".hypo_kernels") -> None:
         self.root = Path(root)
@@ -114,18 +116,19 @@ class KernelLibrary:
         return json.loads(self.manifest_path.read_text(encoding="utf-8"))
 
     def _update_manifest(self, template: KernelTemplate, filename: str) -> None:
-        manifest = self._read_manifest()
-        payload = manifest.setdefault(template.kernel_id, {"latest": template.version, "versions": [], "files": {}})
+        with self._manifest_lock:
+            manifest = self._read_manifest()
+            payload = manifest.setdefault(template.kernel_id, {"latest": template.version, "versions": [], "files": {}})
 
-        versions = payload["versions"]
-        if template.version not in versions:
-            versions.append(template.version)
-        sorted_versions = self._sorted_versions(versions)
-        payload["versions"] = sorted_versions
-        payload["latest"] = sorted_versions[-1]
-        payload["files"][template.version] = filename
+            versions = payload["versions"]
+            if template.version not in versions:
+                versions.append(template.version)
+            sorted_versions = self._sorted_versions(versions)
+            payload["versions"] = sorted_versions
+            payload["latest"] = sorted_versions[-1]
+            payload["files"][template.version] = filename
 
-        self.manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+            self.manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
 
     @staticmethod
     def _sorted_versions(versions: List[str]) -> List[str]:

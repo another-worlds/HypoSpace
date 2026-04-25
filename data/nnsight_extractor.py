@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 from typing import Dict, Iterable, List, Union
 
+from data.utils import resolve_layer
+
 
 def nnsight_available() -> bool:
     """Return True if nnsight and torch are importable."""
@@ -166,7 +168,7 @@ class NNSightExtractor:
         saved: Dict[str, object] = {}
         with lm.trace(inputs):
             for lp in layer_paths:
-                saved[lp] = _resolve_layer(lm, lp).output.save()
+                saved[lp] = resolve_layer(lm, lp).output.save()
         return saved
 
 
@@ -174,8 +176,15 @@ def _tensor_to_floats(raw: object, token_index: int) -> List[float]:
     """Convert a layer output (tensor or tuple) to a flat float list."""
     import torch
 
-    if isinstance(raw, tuple):
+    import warnings
+    depth = 0
+    while isinstance(raw, tuple):
+        if not raw:
+            raise ValueError("Empty tuple from layer output — cannot extract activation tensor")
+        if depth > 0:
+            warnings.warn(f"Layer output is a nested tuple (unwrap depth {depth + 1}); using first element")
         raw = raw[0]
+        depth += 1
     if isinstance(raw, torch.Tensor):
         raw = raw.detach()
         if raw.dim() == 3:
@@ -184,13 +193,3 @@ def _tensor_to_floats(raw: object, token_index: int) -> List[float]:
     return list(raw)  # type: ignore[arg-type]
 
 
-def _resolve_layer(model: object, layer_path: str) -> object:
-    """Navigate a model's attribute tree by dot-separated path.
-
-    Integer segments are treated as sequence indices.
-    Example: "transformer.h.0" → model.transformer.h[0]
-    """
-    node = model
-    for part in layer_path.split("."):
-        node = node[int(part)] if part.isdigit() else getattr(node, part)
-    return node

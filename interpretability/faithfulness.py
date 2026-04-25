@@ -17,6 +17,7 @@ class GovernanceScorecard:
     stability_score: float
     risk_flag: str
     passes_thresholds: bool
+    intervention_method: str = "unknown"
 
 
 class FaithfulnessChecker:
@@ -25,7 +26,11 @@ class FaithfulnessChecker:
     def __init__(self, config: GovernanceConfig | None = None) -> None:
         self.config = config or GovernanceConfig()
 
-    def evaluate(self, interventions: Iterable[InterventionResult]) -> GovernanceScorecard:
+    def evaluate(
+        self,
+        interventions: Iterable[InterventionResult],
+        intervention_method: str = "unknown",
+    ) -> GovernanceScorecard:
         rows = list(interventions)
         if not rows:
             scorecard = GovernanceScorecard(
@@ -33,6 +38,7 @@ class FaithfulnessChecker:
                 stability_score=0.0,
                 risk_flag="no_data",
                 passes_thresholds=False,
+                intervention_method=intervention_method,
             )
             self._enforce_thresholds(scorecard)
             return scorecard
@@ -47,6 +53,7 @@ class FaithfulnessChecker:
             stability_score=stability,
             risk_flag=risk_flag,
             passes_thresholds=passes,
+            intervention_method=intervention_method,
         )
         self._enforce_thresholds(scorecard)
         return scorecard
@@ -65,7 +72,8 @@ class FaithfulnessChecker:
         if not baselines:
             return 0.0
         mean = sum(baselines) / len(baselines)
-        if mean == 0:
+        # Guard against near-zero mean before dividing: avoids denominator collapsing to 1e-6
+        if abs(mean) < 1e-4:
             return 1.0
         variance = sum((value - mean) ** 2 for value in baselines) / len(baselines)
         normalized_std = (variance ** 0.5) / (abs(mean) + 1e-6)

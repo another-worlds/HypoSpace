@@ -18,6 +18,7 @@ class MechanisticAnalyzer:
     """CPU-only 50% ablation stub. Use PyVeneInterventionRunner for real zero-ablation when torch is available."""
 
     def run_interventions(self, features: Iterable[Feature]) -> List[InterventionResult]:
+        """Return synthetic intervention results (ablated = baseline * 0.5, effect_size always baseline / 2)."""
         rows: List[InterventionResult] = []
         for feature in features:
             baseline = feature.score

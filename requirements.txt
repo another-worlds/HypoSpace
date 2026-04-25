@@ -1,0 +1,7 @@
+# Core runtime — stdlib only; no third-party deps required for the base pipeline.
+# Install optional extras as needed:
+#   pip install hypospace[ui]       # Streamlit dashboard
+#   pip install hypospace[nnsight]  # live model extraction
+#   pip install hypospace[pyvene]   # real zero-ablation interventions
+#   pip install hypospace[cache]    # diskcache backend
+streamlit

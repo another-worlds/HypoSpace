@@ -1,19 +1,20 @@
 from __future__ import annotations
 
+import dataclasses
 from typing import Iterable, List
 
 from core.hierarchy import Feature
 
 
 class SemanticInterpreter:
-    """Template-first semantic interpreter."""
+    """Intensity-band semantic interpreter (high ≥ 0.8, medium ≥ 0.4, low < 0.4)."""
 
     def annotate(self, features: Iterable[Feature]) -> List[Feature]:
         enriched: List[Feature] = []
         for feature in features:
             if not feature.label:
                 band = self._intensity_band(feature.score)
-                feature.label = f"{band} concept around activation index {feature.source_index}"
+                feature = dataclasses.replace(feature, label=f"{band} concept around activation index {feature.source_index}")
             enriched.append(feature)
         return enriched
 

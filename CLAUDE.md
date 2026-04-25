@@ -183,7 +183,6 @@ config = DecoderConfig(
     top_k=8,                  # Number of top features to extract
     runtime=RuntimeConfig(
         device="cpu",         # "cpu" or "cuda"
-        batch_size=1,
         max_features=2048,
         cache_dir=".hypo_cache",  # Disk cache root
     ),
