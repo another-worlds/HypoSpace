@@ -90,3 +90,56 @@ Backlog items shipped after MVP:
 - Extended causal path tracing scenarios.
 - Library of reusable Persistent Kernels across model families.
 - Governance scorecard export to standardized reports.
+
+---
+
+## Known Issues
+
+Logged from the 2026-04-24 distributed-agent review. Each entry carries an **ID** echoed as a `# ISSUE-<ID>` comment at the relevant line in the codebase, so you can jump straight from this table to the code.
+
+### Critical — Packaging
+
+| ID | File | Issue |
+|---|---|---|
+| ISSUE-C01 | — | No `pyproject.toml`/`setup.py`; project cannot be pip-installed |
+| ISSUE-C02 | — | No `requirements.txt`; runtime and optional deps documented in prose only |
+| ISSUE-C03 | — | No `LICENSE` file; legally all-rights-reserved |
+| ISSUE-C04 | `.gitignore` | Missing `.venv/`, `*.egg-info/`, `.coverage`, and IDE file entries |
+
+### High — CI/CD
+
+| ID | File | Issue |
+|---|---|---|
+| ISSUE-CI01 | `.github/workflows/ci.yml` | 19 tests in `test_nnsight.py` and `test_pyvene.py` never run in CI |
+| ISSUE-CI02 | `.github/workflows/ci.yml` | No Python version matrix (only 3.11 tested) |
+| ISSUE-CI03 | `.github/workflows/ci.yml` | No linting (`ruff`/`flake8`) or type-checking (`mypy`) step |
+| ISSUE-CI04 | `.github/workflows/ci.yml` | No test coverage reporting |
+| ISSUE-CI05 | `.github/workflows/ci.yml` | CLI exit code contract (`0`/`2`) not validated in CI |
+
+### High — Correctness
+
+| ID | File:Line | Issue |
+|---|---|---|
+| ISSUE-H01 | `data/extractor.py:_cache_key()` | Cache key includes activation values — every unique vector gets its own entry; cache never reuses for the same model/layer; incompatible with `NNSightExtractor`'s input-keyed strategy |
+| ISSUE-H02 | `data/preprocessor.py:normalize()` | No NaN/inf guard — invalid inputs pass through normalization silently, producing nonsensical downstream features |
+| ISSUE-H03 | `interpretability/faithfulness.py:_stability()` | Stability denominator `abs(mean) + 1e-6` collapses to `1e-6` when mean effect size ≈ 0; ratio explodes, assigning artificially low stability to near-zero stable features |
+| ISSUE-H04 | `data/nnsight_extractor.py:_tensor_to_floats()` | Tuple unwrap does `raw[0]` once only; nested tuples from some HuggingFace architectures still appear as a tuple after the first unwrap |
+
+### Medium — Design & Reliability
+
+| ID | File | Issue |
+|---|---|---|
+| ISSUE-M01 | `data/nnsight_extractor.py:_resolve_layer()`, `data/pyvene_runner.py:_resolve_layer()` | `_resolve_layer()` is duplicated verbatim in both files — consolidate in `data/utils.py` |
+| ISSUE-M02 | `interpretability/semantic.py:annotate()` | `annotate()` mutates `Feature.label` in-place; callers holding a reference to the original object observe silent changes |
+| ISSUE-M03 | `interpretability/mechanistic.py:run_interventions()` | Stub `InterventionResult` values use real field names but are synthetic (`baseline * 0.5`); `GovernanceScorecard` has no provenance flag to distinguish stub from real pyvene results |
+| ISSUE-M04 | `core/hierarchy.py:extract_features()` | `top_k ≤ 0` is silently promoted to 1 via `max(1, top_k)`; no warning is emitted to the caller |
+| ISSUE-M05 | `core/kernel_library.py:_read_manifest()` | No file lock on manifest read-modify-write; concurrent `save()` calls from multiple processes can corrupt `manifest.json` |
+| ISSUE-M06 | `api.py:_run_real_interventions()` | `features` parameter typed as bare `list` instead of `List[Feature]` |
+| ISSUE-M07 | `core/config.py:RuntimeConfig` | `batch_size` field is defined and documented but never read by any component |
+
+### Low — Documentation
+
+| ID | File | Issue |
+|---|---|---|
+| ISSUE-L01 | `interpretability/semantic.py:SemanticInterpreter` | Class docstring says "template-first" but implementation uses hardcoded thresholds (0.8, 0.4); no template system exists |
+| ISSUE-L02 | `interpretability/mechanistic.py:run_interventions()` | Docstring does not state that `effect_size` is always `baseline * 0.5`; users may interpret stub governance scorecards as real causal measurements |

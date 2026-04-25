@@ -68,5 +68,6 @@ class FaithfulnessChecker:
         if mean == 0:
             return 1.0
         variance = sum((value - mean) ** 2 for value in baselines) / len(baselines)
+        # ISSUE-H03: denominator → 1e-6 when mean ≈ 0; ratio explodes, assigning artificial low stability
         normalized_std = (variance ** 0.5) / (abs(mean) + 1e-6)
         return max(0.0, 1.0 - min(1.0, normalized_std))

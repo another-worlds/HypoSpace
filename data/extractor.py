@@ -51,5 +51,6 @@ class ActivationExtractor:
 
     @staticmethod
     def _cache_key(values: List[float], model_name: str, layer: str) -> str:
+        # ISSUE-H01: "values" in key → distinct entry per activation vector; cache never reuses for same model/layer
         raw = json.dumps({"model": model_name, "layer": layer, "values": values}, sort_keys=True)
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]

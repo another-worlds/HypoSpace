@@ -161,7 +161,7 @@ class HypoSpaceAPI:
 
     def _run_real_interventions(
         self,
-        features: list,
+        features: list,  # ISSUE-M06: should be List[Feature]
         model_name: str,
         layer_path: str,
         inputs: Union[str, Iterable[int]],

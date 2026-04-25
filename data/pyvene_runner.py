@@ -183,6 +183,7 @@ class PyVeneInterventionRunner:
         return logits[-1]
 
 
+# ISSUE-M01: verbatim copy of nnsight_extractor._resolve_layer — consolidate in data/utils.py
 def _resolve_layer(model: object, layer_path: str) -> object:
     """Navigate a model's attribute tree by dot-separated path (integer = index)."""
     node = model

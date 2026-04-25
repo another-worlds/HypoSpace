@@ -108,6 +108,7 @@ class KernelLibrary:
         self.save(merged)
         return merged
 
+    # ISSUE-M05: no file lock on read-modify-write; concurrent save() calls can corrupt manifest.json
     def _read_manifest(self) -> Dict[str, Dict[str, object]]:
         if not self.manifest_path.exists():
             return {}

@@ -174,6 +174,7 @@ def _tensor_to_floats(raw: object, token_index: int) -> List[float]:
     """Convert a layer output (tensor or tuple) to a flat float list."""
     import torch
 
+    # ISSUE-H04: unwraps one level only; nested tuples from some HuggingFace layers still appear as tuple after this
     if isinstance(raw, tuple):
         raw = raw[0]
     if isinstance(raw, torch.Tensor):
@@ -184,6 +185,7 @@ def _tensor_to_floats(raw: object, token_index: int) -> List[float]:
     return list(raw)  # type: ignore[arg-type]
 
 
+# ISSUE-M01: verbatim copy of pyvene_runner._resolve_layer — consolidate in data/utils.py
 def _resolve_layer(model: object, layer_path: str) -> object:
     """Navigate a model's attribute tree by dot-separated path.
 
