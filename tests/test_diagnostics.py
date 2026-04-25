@@ -22,6 +22,7 @@ _EXPECTED_SUBSYSTEMS = {
     "semantic",
     "mechanistic",
     "full_pipeline",
+    "governance",
     "nnsight",
     "pyvene",
 }
@@ -92,10 +93,10 @@ def test_preprocessor_probe_passes(report):
     assert probe.status == "ok", f"preprocessor probe errors: {probe.errors}"
 
 
-def test_hierarchy_probe_degraded_not_failed(report):
-    # hierarchy always emits a warning about top_k=0 silent promotion → degraded
+def test_hierarchy_probe_passes(report):
+    # top_k=0 now correctly raises ValueError (ISSUE-M04 fixed) → no warning, status ok
     probe = _get_probe(report, "hierarchy")
-    assert probe.status in {"ok", "degraded"}, f"hierarchy probe errors: {probe.errors}"
+    assert probe.status == "ok", f"hierarchy probe errors: {probe.errors}"
     assert probe.errors == [], f"hierarchy probe should have no errors: {probe.errors}"
 
 
@@ -124,9 +125,21 @@ def test_mechanistic_probe_is_degraded(report):
     assert any("stub" in w for w in probe.warnings)
 
 
+def test_mechanistic_probe_intervention_method(report):
+    probe = _get_probe(report, "mechanistic")
+    check = next((c for c in probe.checks if c.name == "intervention_method_field_present"), None)
+    assert check is not None, "intervention_method_field_present check missing from mechanistic probe"
+    assert check.passed, f"intervention_method check failed: {check.detail}"
+
+
 def test_full_pipeline_probe_passes(report):
     probe = _get_probe(report, "full_pipeline")
     assert probe.status == "ok", f"full_pipeline probe errors: {probe.errors}"
+
+
+def test_governance_probe_passes(report):
+    probe = _get_probe(report, "governance")
+    assert probe.status == "ok", f"governance probe errors: {probe.errors}"
 
 
 def test_nnsight_probe_skipped_when_absent(report):
@@ -168,7 +181,7 @@ def test_check_details_have_required_fields(report):
 
 @pytest.mark.parametrize("subsystem", [
     "config", "preprocessor", "hierarchy", "kernel_library",
-    "extractor", "semantic", "mechanistic", "full_pipeline",
+    "extractor", "semantic", "mechanistic", "full_pipeline", "governance",
 ])
 def test_non_optional_probe_not_skipped(subsystem, report):
     probe = _get_probe(report, subsystem)
