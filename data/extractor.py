@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
-from typing import Iterable, List
+from typing import Any, Iterable, List
 
 
 def diskcache_available() -> bool:
@@ -22,7 +22,7 @@ class ActivationExtractor:
     def __init__(self, cache_dir: str = ".hypo_cache") -> None:
         self.cache_root = Path(cache_dir) / "activations"
         self.cache_root.mkdir(parents=True, exist_ok=True)
-        self._dc: object | None = None
+        self._dc: Any | None = None
         if diskcache_available():
             import diskcache
             self._dc = diskcache.Cache(str(self.cache_root))
