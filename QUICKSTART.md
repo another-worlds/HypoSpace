@@ -66,6 +66,6 @@ Tabs: Kernel Explorer · Semantic Canvas · Mechanistic Probes + Governance
 ## 6) Run tests
 
 ```bash
-pytest -q                  # 50 pass, 19 skipped (minimal install)
-pytest -q                  # 69 pass,  0 skipped (full install)
+python -m pytest -q    # 77 pass, 19 skipped (minimal install)
+python -m pytest -q    # 96 pass,  0 skipped (full install)
 ```

@@ -42,7 +42,7 @@ pip install nnsight pyvene diskcache
 | Kernel library, versioning, caching | ✅ JSON cache | ✅ diskcache |
 | Mechanistic interventions | stub (synthetic 50%) | real zero-ablation |
 | Live HuggingFace model extraction | ❌ | ✅ |
-| Full test suite | 50 pass, 19 skipped | 69 pass, 0 skipped |
+| Full test suite | 77 pass, 19 skipped | 96 pass, 0 skipped |
 
 ### 2) Check subsystem health
 

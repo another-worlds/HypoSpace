@@ -40,6 +40,8 @@ HypoSpace/
     ├── test_nnsight.py          # nnsight live extraction tests (11 tests; skipped if nnsight/torch absent)
     ├── test_pyvene.py           # PyVeneInterventionRunner tests (8 tests; skipped if torch absent)
     ├── test_diagnostics.py      # diagnostics module tests (33 tests)
+    ├── test_canvas.py           # SemanticCanvas edge-case tests (7 tests)
+    ├── test_units.py            # negative-path and boundary-value unit tests (20 tests)
     └── fixtures/
         └── mini_regression_set.json
 ```
@@ -95,7 +97,7 @@ python main.py --diagnostics
 # Launch the Streamlit UI
 streamlit run viz/streamlit_app.py
 
-# Run all tests (minimal install: 50 pass, 19 skipped; full install: 69 pass, 0 skipped)
+# Run all tests (minimal install: 77 pass, 19 skipped; full install: 96 pass, 0 skipped)
 python -m pytest -q   # reliable in all environments
 # or: pytest -q       # works when pytest is installed in the active venv
 
@@ -257,16 +259,18 @@ Artifacts are stored under `.hypo_cache/` (configurable via `RuntimeConfig.cache
 ## Testing
 
 ```bash
-pytest -q          # 50 stdlib-only tests always pass; 69 total when all optional deps installed
+python -m pytest -q    # 77 stdlib-only tests always pass; 96 total when all optional deps installed
 ```
 
 **Test modules:**
-- `test_smoke.py` — Full E2E pipeline, semver loading, kernel match/merge, governance errors
-- `test_contracts.py` — Validates JSON payload keys/types for kernel artifacts and canvas output
-- `test_regression.py` — Parametrized against `tests/fixtures/mini_regression_set.json`; KPI guard requires ≥80% mechanistic coverage of top features
-- `test_nnsight.py` — Live extraction via `NNSightExtractor` and `decode_from_model()`; entire module is skipped when nnsight/torch are not installed
-- `test_pyvene.py` — `PyVeneInterventionRunner` hook-fallback path and effect-size correctness; entire module is skipped when torch is not installed
-- `test_diagnostics.py` — 33 tests covering all 11 probes in `diagnostics.py`, JSON serializability, CLI flag, and `HypoSpaceAPI.diagnostics()`
+- `test_smoke.py` — Full E2E pipeline, semver loading, kernel match/merge, governance errors (5 tests)
+- `test_contracts.py` — Validates JSON payload keys/types for kernel artifacts and canvas output (2 tests)
+- `test_regression.py` — Parametrized against `tests/fixtures/mini_regression_set.json`; KPI guard requires ≥80% mechanistic coverage of top features (10 tests)
+- `test_nnsight.py` — Live extraction via `NNSightExtractor` and `decode_from_model()`; entire module is skipped when nnsight/torch are not installed (11 tests)
+- `test_pyvene.py` — `PyVeneInterventionRunner` hook-fallback path and effect-size correctness; entire module is skipped when torch is not installed (8 tests)
+- `test_diagnostics.py` — 33 tests covering all 11 probes in `diagnostics.py`, JSON serializability, CLI flag, and `HypoSpaceAPI.diagnostics()` (33 tests)
+- `test_canvas.py` — `SemanticCanvas` edge cases: empty input, single feature, sort order, edge values (7 tests)
+- `test_units.py` — Negative-path and boundary-value tests for preprocessor, hierarchy, semantic, faithfulness, kernel_library, extractor (20 tests)
 
 Tests use `tmp_path` fixtures for isolation. Never modify `tests/fixtures/mini_regression_set.json` without updating expected outputs — this is the regression baseline.
 
