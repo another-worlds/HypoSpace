@@ -25,7 +25,7 @@ HypoSpace/
 │   ├── nnsight_extractor.py     # NNSightExtractor — live extraction via nnsight model tracing
 │   ├── preprocessor.py          # ActivationPreprocessor — max-abs normalization
 │   ├── pyvene_runner.py         # PyVeneInterventionRunner — real zero-ablation via pyvene/hooks
-│   └── utils.py                 # utc_timestamp() helper
+│   └── utils.py                 # utc_timestamp() helper, resolve_layer() dot-notation traversal
 ├── interpretability/
 │   ├── semantic.py              # SemanticInterpreter — intensity-band auto-labels
 │   ├── mechanistic.py           # MechanisticAnalyzer — synthetic 50% ablation stub (CPU fallback; real zero-ablation in PyVeneInterventionRunner)
@@ -94,7 +94,8 @@ python main.py \
 # Run deep subsystem diagnostics (no other flags needed)
 python main.py --diagnostics
 
-# Launch the Streamlit UI
+# Launch the Streamlit UI (install ui extras first if not already installed)
+# pip install -e ".[ui]"   # or: pip install streamlit
 streamlit run viz/streamlit_app.py
 
 # Run all tests (minimal install: 77 pass, 19 skipped; full install: 96 pass, 0 skipped)
@@ -247,12 +248,12 @@ Artifacts are stored under `.hypo_cache/` (configurable via `RuntimeConfig.cache
 ```
 .hypo_cache/
 ├── manifest.json                    # Kernel registry: versions, file mappings, latest pointer
-├── demo-layer_0-0.1.0.json          # KernelTemplate artifact (semver filename)
+├── demo-model-layer_0-0.1.0.json    # KernelTemplate artifact ({model_name}-{layer}-{version}.json)
 └── activations/
     └── <sha256_hex>.json            # Cached raw activations (keyed by content hash)
 ```
 
-**Kernel versioning:** Filenames follow `{model}-{layer}-{version}.json`. Versions are semver-sorted; `KernelLibrary.load_latest()` returns the highest version. `KernelLibrary.match()` computes cross-run feature overlap by `source_index`. `KernelLibrary.merge()` combines two versioned kernels: for each `source_index` present in both, the higher-scoring feature is kept; indices present only in the candidate are added. The result is saved as a new versioned artifact.
+**Kernel versioning:** Filenames follow `{model_name}-{layer}-{version}.json`. Versions are semver-sorted; `KernelLibrary.load_latest()` returns the highest version. `KernelLibrary.match()` computes cross-run feature overlap by `source_index`. `KernelLibrary.merge()` combines two versioned kernels: for each `source_index` present in both, the higher-scoring feature is kept; indices present only in the candidate are added. The result is saved as a new versioned artifact.
 
 ---
 

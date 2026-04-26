@@ -28,7 +28,7 @@ jobs:
         run: pip install pytest
 
       - name: Run stdlib-only tests
-        run: pytest tests/test_smoke.py tests/test_contracts.py tests/test_regression.py tests/test_diagnostics.py -v
+        run: pytest tests/test_smoke.py tests/test_contracts.py tests/test_regression.py tests/test_diagnostics.py tests/test_canvas.py tests/test_units.py -v
 
       - name: Validate CLI exit code contract (CI05)
         run: |
@@ -52,7 +52,7 @@ jobs:
         run: pip install pytest diskcache
 
       - name: Run stdlib-only tests with diskcache backend
-        run: pytest tests/test_smoke.py tests/test_contracts.py tests/test_regression.py tests/test_diagnostics.py -v
+        run: pytest tests/test_smoke.py tests/test_contracts.py tests/test_regression.py tests/test_diagnostics.py tests/test_canvas.py tests/test_units.py -v
 
   # ------------------------------------------------------------------ #
   # Torch-only tests — covers test_pyvene.py (CI01 partial)            #

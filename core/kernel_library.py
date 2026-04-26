@@ -29,7 +29,7 @@ class KernelLibrary:
     MANIFEST_NAME = "manifest.json"
     _manifest_lock: threading.Lock = threading.Lock()
 
-    def __init__(self, root: str | Path = ".hypo_kernels") -> None:
+    def __init__(self, root: str | Path = ".hypo_cache") -> None:
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
         self.manifest_path = self.root / self.MANIFEST_NAME
