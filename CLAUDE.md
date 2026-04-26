@@ -48,27 +48,31 @@ HypoSpace/
 
 ### Processing Pipeline
 
-**Path A — raw activations (existing):**
+**Path A — raw activations (`decode()` / `decode_and_score()`):**
 ```
 raw_activations
-  → ActivationExtractor   (disk cache, SHA256 key)
+  → ActivationExtractor    (disk cache, SHA256 key)
   → ActivationPreprocessor (max-abs normalization)
   → RealityDecoder → HierarchyEngine  (top-k by magnitude)
-  → KernelLibrary         (save artifact, compute cross-run match rate)
-  → SemanticInterpreter   (intensity-band labels)
+  → KernelLibrary          (save artifact, compute cross-run match rate)
+  → SemanticInterpreter    (intensity-band labels)
+  → DecodeResult                         ← decode() stops here
+
+  # decode_and_score() continues:
   → MechanisticAnalyzer   (synthetic 50% stub) or PyVeneInterventionRunner (real zero-ablation, when torch available)
   → FaithfulnessChecker   (faithfulness + stability scores)
   → HypoSpaceResult
 ```
 
-**Path B — live model extraction via nnsight:**
+**Path B — live model extraction via nnsight (`decode_from_model()` / `decode_and_score_from_model()`):**
 ```
 model_name + inputs + layer_path
-  → NNSightExtractor.extract()  (nnsight forward-pass trace)
-  → ActivationExtractor         (disk cache after extraction)
+  → NNSightExtractor.extract()  (nnsight forward-pass trace; own input-keyed cache)
   → ActivationPreprocessor (max-abs normalization)
   → RealityDecoder → …          (same as Path A from here)
-  → DecodeResult
+  → DecodeResult                         ← decode_from_model() stops here
+
+  # decode_and_score_from_model() continues as in Path A
 ```
 
 ---
@@ -218,7 +222,7 @@ All data structures are `@dataclass(slots=True)` — do **not** add `__dict__`-b
 | `DecodeResult` | `core/decoder.py` | Output of decode step: `model_name`, `layer`, `features[]`, `kernel_path`, `metadata{}` |
 | `KernelTemplate` | `core/kernel_library.py` | Persisted artifact with semver `version` and feature list |
 | `InterventionResult` | `interpretability/mechanistic.py` | `feature_id`, `baseline`, `ablated`, `effect_size` |
-| `GovernanceScorecard` | `interpretability/faithfulness.py` | `faithfulness_score`, `stability_score`, `risk_flag`, `passes_thresholds` |
+| `GovernanceScorecard` | `interpretability/faithfulness.py` | `faithfulness_score`, `stability_score`, `risk_flag`, `passes_thresholds`, `intervention_method` |
 | `HypoSpaceResult` | `api.py` | Top-level result: `.decode` + `.scorecard` |
 | `CheckDetail` | `diagnostics.py` | One assertion within a probe: `name`, `passed`, `detail` |
 | `ProbeResult` | `diagnostics.py` | Outcome of a single subsystem probe: `subsystem`, `status`, `latency_ms`, `checks[]`, `warnings[]`, `errors[]` |
