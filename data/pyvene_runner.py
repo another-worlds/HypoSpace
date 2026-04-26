@@ -119,7 +119,7 @@ class PyVeneInterventionRunner:
         import pyvene as pv
         import torch
 
-        hf_model = self.lm.model
+        hf_model = self.lm._module
         layer_module = resolve_layer(hf_model, self.layer_path)
         layer_index = _layer_index(self.layer_path)
 
@@ -155,10 +155,14 @@ class PyVeneInterventionRunner:
     def _ablate_with_hooks(
         self, inputs: Union[str, Iterable[int]], source_index: int
     ) -> object:
-        """Zero-ablate source_index at the target layer via a PyTorch forward hook."""
+        """Zero-ablate source_index at the target layer via a PyTorch forward hook.
+
+        Runs directly on the underlying HuggingFace model (self.lm._module) to
+        avoid conflicts between registered hooks and nnsight's trace context.
+        """
         import torch
 
-        hf_model = self.lm.model
+        hf_model = self.lm._module
         layer_module = resolve_layer(hf_model, self.layer_path)
 
         def _zero_dim(module: object, input: object, output: object) -> object:
@@ -171,14 +175,20 @@ class PyVeneInterventionRunner:
             cloned[..., source_index] = 0.0
             return cloned
 
+        if isinstance(inputs, str):
+            encoded = self.lm.tokenizer(inputs, return_tensors="pt")
+            input_ids = encoded["input_ids"].to(self.device)
+        else:
+            input_ids = torch.tensor([list(inputs)], device=self.device)
+
         handle = layer_module.register_forward_hook(_zero_dim)
         try:
-            with self.lm.trace(inputs):
-                out = self.lm.output.logits.save()
+            with torch.no_grad():
+                out = hf_model(input_ids)
         finally:
             handle.remove()
 
-        logits = out if isinstance(out, torch.Tensor) else out[0]
+        logits = out.logits if hasattr(out, "logits") else out[0]
         if logits.dim() == 3:
             logits = logits[0]
         return logits[-1]
