@@ -25,7 +25,7 @@ HypoSpace/
 │   ├── nnsight_extractor.py     # NNSightExtractor — live extraction via nnsight model tracing
 │   ├── preprocessor.py          # ActivationPreprocessor — max-abs normalization
 │   ├── pyvene_runner.py         # PyVeneInterventionRunner — real zero-ablation via pyvene/hooks
-│   └── utils.py                 # utc_timestamp() helper
+│   └── utils.py                 # utc_timestamp() helper, resolve_layer() dot-notation traversal
 ├── interpretability/
 │   ├── semantic.py              # SemanticInterpreter — intensity-band auto-labels
 │   ├── mechanistic.py           # MechanisticAnalyzer — synthetic 50% ablation stub (CPU fallback; real zero-ablation in PyVeneInterventionRunner)
@@ -48,27 +48,31 @@ HypoSpace/
 
 ### Processing Pipeline
 
-**Path A — raw activations (existing):**
+**Path A — raw activations (`decode()` / `decode_and_score()`):**
 ```
 raw_activations
-  → ActivationExtractor   (disk cache, SHA256 key)
+  → ActivationExtractor    (disk cache, SHA256 key)
   → ActivationPreprocessor (max-abs normalization)
   → RealityDecoder → HierarchyEngine  (top-k by magnitude)
-  → KernelLibrary         (save artifact, compute cross-run match rate)
-  → SemanticInterpreter   (intensity-band labels)
+  → KernelLibrary          (save artifact, compute cross-run match rate)
+  → SemanticInterpreter    (intensity-band labels)
+  → DecodeResult                         ← decode() stops here
+
+  # decode_and_score() continues:
   → MechanisticAnalyzer   (synthetic 50% stub) or PyVeneInterventionRunner (real zero-ablation, when torch available)
   → FaithfulnessChecker   (faithfulness + stability scores)
   → HypoSpaceResult
 ```
 
-**Path B — live model extraction via nnsight:**
+**Path B — live model extraction via nnsight (`decode_from_model()` / `decode_and_score_from_model()`):**
 ```
 model_name + inputs + layer_path
-  → NNSightExtractor.extract()  (nnsight forward-pass trace)
-  → ActivationExtractor         (disk cache after extraction)
+  → NNSightExtractor.extract()  (nnsight forward-pass trace; own input-keyed cache)
   → ActivationPreprocessor (max-abs normalization)
   → RealityDecoder → …          (same as Path A from here)
-  → DecodeResult
+  → DecodeResult                         ← decode_from_model() stops here
+
+  # decode_and_score_from_model() continues as in Path A
 ```
 
 ---
@@ -94,7 +98,8 @@ python main.py \
 # Run deep subsystem diagnostics (no other flags needed)
 python main.py --diagnostics
 
-# Launch the Streamlit UI
+# Launch the Streamlit UI (install ui extras first if not already installed)
+# pip install -e ".[ui]"   # or: pip install streamlit
 streamlit run viz/streamlit_app.py
 
 # Run all tests (minimal install: 77 pass, 19 skipped; full install: 96 pass, 0 skipped)
@@ -217,7 +222,7 @@ All data structures are `@dataclass(slots=True)` — do **not** add `__dict__`-b
 | `DecodeResult` | `core/decoder.py` | Output of decode step: `model_name`, `layer`, `features[]`, `kernel_path`, `metadata{}` |
 | `KernelTemplate` | `core/kernel_library.py` | Persisted artifact with semver `version` and feature list |
 | `InterventionResult` | `interpretability/mechanistic.py` | `feature_id`, `baseline`, `ablated`, `effect_size` |
-| `GovernanceScorecard` | `interpretability/faithfulness.py` | `faithfulness_score`, `stability_score`, `risk_flag`, `passes_thresholds` |
+| `GovernanceScorecard` | `interpretability/faithfulness.py` | `faithfulness_score`, `stability_score`, `risk_flag`, `passes_thresholds`, `intervention_method` |
 | `HypoSpaceResult` | `api.py` | Top-level result: `.decode` + `.scorecard` |
 | `CheckDetail` | `diagnostics.py` | One assertion within a probe: `name`, `passed`, `detail` |
 | `ProbeResult` | `diagnostics.py` | Outcome of a single subsystem probe: `subsystem`, `status`, `latency_ms`, `checks[]`, `warnings[]`, `errors[]` |
@@ -247,12 +252,12 @@ Artifacts are stored under `.hypo_cache/` (configurable via `RuntimeConfig.cache
 ```
 .hypo_cache/
 ├── manifest.json                    # Kernel registry: versions, file mappings, latest pointer
-├── demo-layer_0-0.1.0.json          # KernelTemplate artifact (semver filename)
+├── demo-model-layer_0-0.1.0.json    # KernelTemplate artifact ({model_name}-{layer}-{version}.json)
 └── activations/
     └── <sha256_hex>.json            # Cached raw activations (keyed by content hash)
 ```
 
-**Kernel versioning:** Filenames follow `{model}-{layer}-{version}.json`. Versions are semver-sorted; `KernelLibrary.load_latest()` returns the highest version. `KernelLibrary.match()` computes cross-run feature overlap by `source_index`. `KernelLibrary.merge()` combines two versioned kernels: for each `source_index` present in both, the higher-scoring feature is kept; indices present only in the candidate are added. The result is saved as a new versioned artifact.
+**Kernel versioning:** Filenames follow `{model_name}-{layer}-{version}.json`. Versions are semver-sorted; `KernelLibrary.load_latest()` returns the highest version. `KernelLibrary.match()` computes cross-run feature overlap by `source_index`. `KernelLibrary.merge()` combines two versioned kernels: for each `source_index` present in both, the higher-scoring feature is kept; indices present only in the candidate are added. The result is saved as a new versioned artifact.
 
 ---
 
@@ -263,7 +268,7 @@ python -m pytest -q    # 77 stdlib-only tests always pass; 96 total when all opt
 ```
 
 **Test modules:**
-- `test_smoke.py` — Full E2E pipeline, semver loading, kernel match/merge, governance errors (5 tests)
+- `test_smoke.py` — Full E2E pipeline, semver loading, kernel match/merge, merge semantics, governance errors (5 tests)
 - `test_contracts.py` — Validates JSON payload keys/types for kernel artifacts and canvas output (2 tests)
 - `test_regression.py` — Parametrized against `tests/fixtures/mini_regression_set.json`; KPI guard requires ≥80% mechanistic coverage of top features (10 tests)
 - `test_nnsight.py` — Live extraction via `NNSightExtractor` and `decode_from_model()`; entire module is skipped when nnsight/torch are not installed (11 tests)
