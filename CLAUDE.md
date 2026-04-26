@@ -268,7 +268,7 @@ python -m pytest -q    # 77 stdlib-only tests always pass; 96 total when all opt
 ```
 
 **Test modules:**
-- `test_smoke.py` — Full E2E pipeline, semver loading, kernel match/merge, governance errors (5 tests)
+- `test_smoke.py` — Full E2E pipeline, semver loading, kernel match/merge, merge semantics, governance errors (5 tests)
 - `test_contracts.py` — Validates JSON payload keys/types for kernel artifacts and canvas output (2 tests)
 - `test_regression.py` — Parametrized against `tests/fixtures/mini_regression_set.json`; KPI guard requires ≥80% mechanistic coverage of top features (10 tests)
 - `test_nnsight.py` — Live extraction via `NNSightExtractor` and `decode_from_model()`; entire module is skipped when nnsight/torch are not installed (11 tests)
