@@ -68,8 +68,16 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install torch (CPU) and pytest
-        run: pip install pytest torch --index-url https://download.pytorch.org/whl/cpu
+      - name: Cache HuggingFace models
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface/hub
+          key: huggingface-gpt2-v1
+
+      - name: Install torch (CPU), nnsight, and pytest
+        run: |
+          pip install pytest torch --index-url https://download.pytorch.org/whl/cpu
+          pip install nnsight
 
       - name: Run stdlib + pyvene tests
         run: pytest tests/test_smoke.py tests/test_contracts.py tests/test_regression.py tests/test_diagnostics.py tests/test_pyvene.py -v

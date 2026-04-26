@@ -6,10 +6,11 @@ import pytest
 
 _TORCH_AVAILABLE = importlib.util.find_spec("torch") is not None
 _PYVENE_AVAILABLE = importlib.util.find_spec("pyvene") is not None
+_NNSIGHT_AVAILABLE = importlib.util.find_spec("nnsight") is not None
 
 pytestmark = pytest.mark.skipif(
-    not _TORCH_AVAILABLE,
-    reason="torch is required for PyVeneInterventionRunner tests",
+    not _TORCH_AVAILABLE or not _NNSIGHT_AVAILABLE,
+    reason="torch and nnsight are required for PyVeneInterventionRunner tests",
 )
 
 
