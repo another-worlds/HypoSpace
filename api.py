@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Public one-call façade: HypoSpaceAPI orchestrates decode, score, and diagnostics workflows."""
+
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Iterable, Union
 

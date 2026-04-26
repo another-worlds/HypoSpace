@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""SemanticInterpreter: intensity-band auto-labeling for decoded features."""
+
 import dataclasses
 from typing import Iterable, List
 

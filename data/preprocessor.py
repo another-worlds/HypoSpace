@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""ActivationPreprocessor: max-abs normalization for raw activation vectors."""
+
 from typing import Iterable, List
 
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Subsystem health probes: run_diagnostics() returns a DiagnosticsReport with per-probe status."""
+
 import importlib.util
 import json
 import math

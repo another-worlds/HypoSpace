@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Shared utilities: utc_timestamp() and resolve_layer() for dot-notation model traversal."""
+
 from datetime import datetime, timezone
 
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""FaithfulnessChecker, GovernanceScorecard, and GovernanceThresholdError for governance enforcement."""
+
 from dataclasses import dataclass
 from typing import Iterable
 

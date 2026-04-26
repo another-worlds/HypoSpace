@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from typing import Iterable, List, Union
+"""PyVeneInterventionRunner: real zero-ablation interventions via pyvene or PyTorch hooks."""
+
+from typing import Any, Iterable, List, Union
 
 from core.hierarchy import Feature
 from data.utils import resolve_layer
@@ -32,7 +34,7 @@ class PyVeneInterventionRunner:
     to raw PyTorch forward hooks, which achieve the same effect.
     """
 
-    def __init__(self, lm: object, layer_path: str, device: str = "cpu") -> None:
+    def __init__(self, lm: Any, layer_path: str, device: str = "cpu") -> None:
         self.lm = lm
         self.layer_path = layer_path
         self.device = device
@@ -92,7 +94,7 @@ class PyVeneInterventionRunner:
 
         return results
 
-    def _get_baseline_logits(self, inputs: Union[str, Iterable[int]]) -> object:
+    def _get_baseline_logits(self, inputs: Union[str, Iterable[int]]) -> Any:
         """Run a plain forward pass and return the output logits tensor."""
         import torch
 
@@ -106,7 +108,7 @@ class PyVeneInterventionRunner:
 
     def _ablate_with_pyvene(
         self, inputs: Union[str, Iterable[int]], source_index: int
-    ) -> object:
+    ) -> Any:
         """Zero-ablate source_index using pyvene's ZeroIntervention."""
         try:
             return self._ablate_with_pyvene_impl(inputs, source_index)
@@ -115,7 +117,7 @@ class PyVeneInterventionRunner:
 
     def _ablate_with_pyvene_impl(
         self, inputs: Union[str, Iterable[int]], source_index: int
-    ) -> object:
+    ) -> Any:
         import pyvene as pv
         import torch
 
@@ -154,7 +156,7 @@ class PyVeneInterventionRunner:
 
     def _ablate_with_hooks(
         self, inputs: Union[str, Iterable[int]], source_index: int
-    ) -> object:
+    ) -> Any:
         """Zero-ablate source_index at the target layer via a PyTorch forward hook.
 
         Runs directly on the underlying HuggingFace model (self.lm._module) to
@@ -165,7 +167,7 @@ class PyVeneInterventionRunner:
         hf_model = self.lm._module
         layer_module = resolve_layer(hf_model, self.layer_path)
 
-        def _zero_dim(module: object, input: object, output: object) -> object:
+        def _zero_dim(module: Any, input: Any, output: Any) -> Any:
             if isinstance(output, tuple):
                 lst = list(output)
                 lst[0] = lst[0].clone()

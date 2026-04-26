@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""KernelLibrary: semver-versioned JSON persistence for KernelTemplate artifacts."""
+
 from dataclasses import asdict, dataclass, field
 import json
 from pathlib import Path

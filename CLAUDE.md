@@ -96,7 +96,8 @@ python main.py --diagnostics
 streamlit run viz/streamlit_app.py
 
 # Run all tests (minimal install: 50 pass, 19 skipped; full install: 69 pass, 0 skipped)
-pytest -q
+python -m pytest -q   # reliable in all environments
+# or: pytest -q       # works when pytest is installed in the active venv
 
 # Install full optional stack (CPU torch — matches CI)
 pip install torch --index-url https://download.pytorch.org/whl/cpu

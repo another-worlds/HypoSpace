@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""ActivationExtractor: SHA256-keyed disk cache with optional diskcache backend."""
+
 import hashlib
 import json
 from pathlib import Path

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Configuration dataclasses: DecoderConfig, RuntimeConfig, GovernanceConfig."""
+
 from dataclasses import dataclass, field
 from typing import Dict
 
