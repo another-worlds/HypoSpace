@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Subsystem health probes: run_diagnostics() returns a DiagnosticsReport with per-probe status."""
+
 import importlib.util
 import json
 import math
@@ -476,7 +478,7 @@ def _probe_mechanistic(tmp_dir: Path) -> ProbeResult:
         if not no_nan:
             errors.append("NaN/inf found in intervention effect_sizes")
 
-        sc = FaithfulnessChecker().evaluate(results)
+        sc = FaithfulnessChecker().evaluate(results, intervention_method="stub-50pct")
         faith_ok = 0.0 <= sc.faithfulness_score <= 1.0
         checks.append(CheckDetail("faithfulness_score_in_range", faith_ok, f"faithfulness_score={sc.faithfulness_score}"))
         if not faith_ok:
@@ -491,6 +493,11 @@ def _probe_mechanistic(tmp_dir: Path) -> ProbeResult:
         checks.append(CheckDetail("risk_flag_valid_value", flag_ok, f"risk_flag='{sc.risk_flag}'"))
         if not flag_ok:
             errors.append(f"Unexpected risk_flag value: '{sc.risk_flag}'")
+
+        method_ok = sc.intervention_method == "stub-50pct"
+        checks.append(CheckDetail("intervention_method_field_present", method_ok, f"intervention_method={sc.intervention_method!r}"))
+        if not method_ok:
+            errors.append(f"Unexpected intervention_method: {sc.intervention_method!r}")
 
         warnings.append("MechanisticAnalyzer is a 50% ablation stub — real interventions require torch + pyvene")
 
@@ -562,12 +569,83 @@ def _probe_full_pipeline(tmp_dir: Path) -> ProbeResult:
         if not rate_ok:
             errors.append(f"cross_run_match_rate not parseable as float in [0,1]: '{rate_str}'")
 
+        try:
+            api_nan = HypoSpaceAPI(config=DecoderConfig(top_k=2, runtime=RuntimeConfig(cache_dir=str(tmp_dir / "nan_cache"))))
+            api_nan.decode("diag-model", "diag-layer", [float("nan"), 0.5, -0.3])
+            checks.append(CheckDetail("nan_input_rejected", False, "NaN input was not rejected at API boundary"))
+            errors.append("NaN activations passed through api.decode() without raising ValueError")
+        except ValueError:
+            checks.append(CheckDetail("nan_input_rejected", True, "NaN input correctly raises ValueError"))
+        except Exception as nan_exc:
+            checks.append(CheckDetail("nan_input_rejected", False, f"unexpected exception: {type(nan_exc).__name__}"))
+            errors.append(f"NaN input raised unexpected exception: {type(nan_exc).__name__}: {nan_exc}")
+
     except Exception as exc:
         errors.append(f"probe crashed: {exc}")
 
     latency_ms = (time.monotonic() - start) * 1000.0
     status = "failed" if errors else ("degraded" if warnings else "ok")
     return ProbeResult("full_pipeline", status, round(latency_ms, 3), checks, warnings, errors)
+
+
+def _probe_governance(tmp_dir: Path) -> ProbeResult:
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    start = time.monotonic()
+    checks: List[CheckDetail] = []
+    warnings: List[str] = []
+    errors: List[str] = []
+    try:
+        from core.config import GovernanceConfig
+        from core.hierarchy import Feature
+        from interpretability.faithfulness import FaithfulnessChecker, GovernanceThresholdError
+        from interpretability.mechanistic import MechanisticAnalyzer
+
+        features = [
+            Feature(id="gov:feature:0", layer="gov-layer", score=0.001, source_index=0),
+            Feature(id="gov:feature:1", layer="gov-layer", score=0.001, source_index=1),
+        ]
+        interventions = MechanisticAnalyzer().run_interventions(features)
+
+        lenient = FaithfulnessChecker(
+            GovernanceConfig(min_faithfulness_score=0.0, min_stability_score=0.0, fail_on_low_confidence=False)
+        )
+        scorecard = lenient.evaluate(interventions, intervention_method="stub-50pct")
+        sc_ok = isinstance(scorecard.passes_thresholds, bool)
+        checks.append(CheckDetail("lenient_checker_returns_scorecard", sc_ok, f"passes_thresholds={scorecard.passes_thresholds}"))
+        if not sc_ok:
+            errors.append("FaithfulnessChecker.evaluate() did not return a GovernanceScorecard")
+
+        method_ok = scorecard.intervention_method == "stub-50pct"
+        checks.append(CheckDetail("intervention_method_propagated", method_ok, f"intervention_method={scorecard.intervention_method!r}"))
+        if not method_ok:
+            errors.append(f"intervention_method not propagated to scorecard: {scorecard.intervention_method!r}")
+
+        strict = FaithfulnessChecker(
+            GovernanceConfig(min_faithfulness_score=0.99, min_stability_score=0.99, fail_on_low_confidence=True)
+        )
+        threshold_raised = False
+        try:
+            strict.evaluate(interventions)
+        except GovernanceThresholdError:
+            threshold_raised = True
+        except Exception as exc:
+            errors.append(f"Expected GovernanceThresholdError, got {type(exc).__name__}: {exc}")
+        checks.append(CheckDetail("threshold_error_raised", threshold_raised, "GovernanceThresholdError raised with impossible thresholds"))
+        if not threshold_raised:
+            errors.append("GovernanceThresholdError was not raised with fail_on_low_confidence=True and impossible thresholds")
+
+        empty_sc = lenient.evaluate([])
+        no_data_ok = empty_sc.risk_flag == "no_data"
+        checks.append(CheckDetail("empty_interventions_no_data_flag", no_data_ok, f"risk_flag={empty_sc.risk_flag!r}"))
+        if not no_data_ok:
+            errors.append(f"Empty interventions should yield risk_flag='no_data', got {empty_sc.risk_flag!r}")
+
+    except Exception as exc:
+        errors.append(f"probe crashed: {exc}")
+
+    latency_ms = (time.monotonic() - start) * 1000.0
+    status = "failed" if errors else ("degraded" if warnings else "ok")
+    return ProbeResult("governance", status, round(latency_ms, 3), checks, warnings, errors)
 
 
 def _probe_nnsight(tmp_dir: Path) -> ProbeResult:
@@ -648,6 +726,7 @@ def run_diagnostics() -> DiagnosticsReport:
             _probe_semantic(tmp_dir / "semantic"),
             _probe_mechanistic(tmp_dir / "mechanistic"),
             _probe_full_pipeline(tmp_dir / "pipeline"),
+            _probe_governance(tmp_dir / "governance"),
             _probe_nnsight(tmp_dir / "nnsight"),
             _probe_pyvene(tmp_dir / "pyvene"),
         ]

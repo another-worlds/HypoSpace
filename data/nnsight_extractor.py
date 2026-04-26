@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+"""NNSightExtractor: live activation extraction from HuggingFace models via nnsight tracing."""
+
 import hashlib
 import json
 from pathlib import Path
-from typing import Dict, Iterable, List, Union
+from typing import Any, Dict, Iterable, List, Union
 
 from data.utils import resolve_layer
 
@@ -75,7 +77,7 @@ class NNSightExtractor:
         self.model_name = model_name
         self.device = device
         self._cache = _NNSightInputCache(cache_dir)
-        self._lm: object | None = None
+        self._lm: Any | None = None
 
     @classmethod
     def require(cls) -> None:
@@ -86,7 +88,7 @@ class NNSightExtractor:
                 "Install with: pip install nnsight"
             )
 
-    def _load_model(self) -> object:
+    def _load_model(self) -> Any:
         self.require()
         if self._lm is None:
             from nnsight import LanguageModel
@@ -162,17 +164,17 @@ class NNSightExtractor:
         self,
         inputs: str | Iterable[int],
         layer_paths: list[str],
-    ) -> Dict[str, object]:
+    ) -> Dict[str, Any]:
         """Run one nnsight forward pass and return raw tensors per layer."""
         lm = self._load_model()
-        saved: Dict[str, object] = {}
+        saved: Dict[str, Any] = {}
         with lm.trace(inputs):
             for lp in layer_paths:
                 saved[lp] = resolve_layer(lm, lp).output.save()
         return saved
 
 
-def _tensor_to_floats(raw: object, token_index: int) -> List[float]:
+def _tensor_to_floats(raw: Any, token_index: int) -> List[float]:
     """Convert a layer output (tensor or tuple) to a flat float list."""
     import torch
 

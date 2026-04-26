@@ -1,3 +1,8 @@
 -r requirements.txt
 pytest
 diskcache
+# CPU-only torch — for CI-like environments without a GPU.
+# For GPU support omit the --index-url flag when installing manually.
+torch --index-url https://download.pytorch.org/whl/cpu
+nnsight
+pyvene

@@ -4,10 +4,20 @@ Fast reference — see README for full detail on each step.
 
 ## 1) Install dependencies
 
+**Minimal** (stdlib + UI, no GPU required):
+
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -U pip pytest streamlit
+```
+
+**Full** (live extraction, real interventions, faster cache):
+
+```bash
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+pip install nnsight pyvene diskcache
+# or: pip install -e ".[nnsight,pyvene,cache,dev]"
 ```
 
 ## 2) Check subsystem health
@@ -16,7 +26,7 @@ pip install -U pip pytest streamlit
 python main.py --diagnostics
 ```
 
-Prints a JSON report showing the status of every subsystem and which optional dependencies (torch, nnsight, pyvene, diskcache) are available. Run this first after any environment change.
+Prints a JSON report for every subsystem. Minimal install: `"overall_status": "degraded"` (expected — stub interventions and no diskcache). Full install: only the mechanistic probe stays degraded by design. Run after any environment change.
 
 ## 3) Run CLI demo
 
@@ -56,5 +66,6 @@ Tabs: Kernel Explorer · Semantic Canvas · Mechanistic Probes + Governance
 ## 6) Run tests
 
 ```bash
-pytest -q
+python -m pytest -q    # 77 pass, 19 skipped (minimal install)
+python -m pytest -q    # 96 pass,  0 skipped (full install)
 ```

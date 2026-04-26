@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Streamlit UI: three-tab interactive explorer for kernels, canvas, and governance."""
+
 from typing import List
 
 from api import HypoSpaceAPI

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""HierarchyEngine and Feature dataclass: top-k feature extraction by activation magnitude."""
+
 from dataclasses import dataclass
 from typing import Iterable, List
 

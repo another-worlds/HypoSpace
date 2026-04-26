@@ -19,11 +19,30 @@ At a high level, HypoSpace:
 
 ### 1) Install dependencies
 
+**Minimal** — stdlib pipeline, Streamlit UI, no GPU required:
+
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -U pip pytest streamlit
 ```
+
+**Full** — adds live HuggingFace extraction, real zero-ablation interventions, and faster cache:
+
+```bash
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+pip install nnsight pyvene diskcache
+# or via extras: pip install -e ".[nnsight,pyvene,cache,dev]"
+```
+
+| Feature | Minimal | Full |
+|---|---|---|
+| CLI decode + governance scorecard | ✅ | ✅ |
+| Streamlit UI | ✅ | ✅ |
+| Kernel library, versioning, caching | ✅ JSON cache | ✅ diskcache |
+| Mechanistic interventions | stub (synthetic 50%) | real zero-ablation |
+| Live HuggingFace model extraction | ❌ | ✅ |
+| Full test suite | 77 pass, 19 skipped | 96 pass, 0 skipped |
 
 ### 2) Check subsystem health
 
@@ -31,7 +50,7 @@ pip install -U pip pytest streamlit
 python main.py --diagnostics
 ```
 
-Prints a JSON report showing the status of every subsystem (config, preprocessor, hierarchy, kernel library, extractor, semantic, mechanistic, full pipeline, nnsight, pyvene) and which optional dependencies (torch, nnsight, pyvene, diskcache) are available. Useful before a first run or after environment changes.
+Prints a JSON report showing the status of every subsystem and which optional dependencies are available. On a minimal install expect `"overall_status": "degraded"` — the mechanistic stub and absent diskcache both warn. After a full install only the mechanistic probe remains degraded (by design — real causal measurements require a trained SAE backend). Run this after any environment change.
 
 ### 3) Run the CLI demo
 

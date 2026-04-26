@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""SemanticCanvas: feature-point and nearest-neighbour-edge visualization helpers."""
+
 from typing import Iterable, List, Tuple
 
 from core.hierarchy import Feature

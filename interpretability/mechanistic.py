@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""MechanisticAnalyzer: synthetic 50% ablation stub — CPU fallback for real pyvene interventions."""
+
 from dataclasses import dataclass
 from typing import Iterable, List
 

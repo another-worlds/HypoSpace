@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""CLI entrypoint — parses flags and delegates to HypoSpaceAPI or run_diagnostics()."""
+
 import argparse
 import json
 
