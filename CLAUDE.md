@@ -39,7 +39,7 @@ HypoSpace/
     ├── test_regression.py       # Fixed mini-set regression + KPI guard (10 tests: 9 fixture cases + 1 KPI guard)
     ├── test_nnsight.py          # nnsight live extraction tests (11 tests; skipped if nnsight/torch absent)
     ├── test_pyvene.py           # PyVeneInterventionRunner tests (8 tests; skipped if torch absent)
-    ├── test_diagnostics.py      # diagnostics module tests (23 tests)
+    ├── test_diagnostics.py      # diagnostics module tests (33 tests)
     └── fixtures/
         └── mini_regression_set.json
 ```
@@ -95,8 +95,13 @@ python main.py --diagnostics
 # Launch the Streamlit UI
 streamlit run viz/streamlit_app.py
 
-# Run all tests
+# Run all tests (minimal install: 50 pass, 19 skipped; full install: 69 pass, 0 skipped)
 pytest -q
+
+# Install full optional stack (CPU torch — matches CI)
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+pip install nnsight pyvene diskcache
+# or: pip install -e ".[nnsight,pyvene,cache,dev]"
 
 # Run a specific test module
 pytest tests/test_smoke.py -v
@@ -251,7 +256,7 @@ Artifacts are stored under `.hypo_cache/` (configurable via `RuntimeConfig.cache
 ## Testing
 
 ```bash
-pytest -q          # 32 stdlib-only tests always pass; 51 total when nnsight + torch + pyvene installed
+pytest -q          # 50 stdlib-only tests always pass; 69 total when all optional deps installed
 ```
 
 **Test modules:**
@@ -260,7 +265,7 @@ pytest -q          # 32 stdlib-only tests always pass; 51 total when nnsight + t
 - `test_regression.py` — Parametrized against `tests/fixtures/mini_regression_set.json`; KPI guard requires ≥80% mechanistic coverage of top features
 - `test_nnsight.py` — Live extraction via `NNSightExtractor` and `decode_from_model()`; entire module is skipped when nnsight/torch are not installed
 - `test_pyvene.py` — `PyVeneInterventionRunner` hook-fallback path and effect-size correctness; entire module is skipped when torch is not installed
-- `test_diagnostics.py` — 23 tests covering all 10 probes in `diagnostics.py`, JSON serializability, CLI flag, and `HypoSpaceAPI.diagnostics()`
+- `test_diagnostics.py` — 33 tests covering all 11 probes in `diagnostics.py`, JSON serializability, CLI flag, and `HypoSpaceAPI.diagnostics()`
 
 Tests use `tmp_path` fixtures for isolation. Never modify `tests/fixtures/mini_regression_set.json` without updating expected outputs — this is the regression baseline.
 
