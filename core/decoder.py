@@ -2,6 +2,7 @@ from __future__ import annotations
 
 """RealityDecoder: orchestrates the activation → feature → kernel decode pipeline."""
 
+import warnings
 from dataclasses import dataclass, field
 from typing import Dict, Iterable, List
 
@@ -48,6 +49,10 @@ class RealityDecoder:
                 positive = [score for score in match_scores.values() if score >= 0.5]
                 cross_run_match_rate = len(positive) / len(match_scores)
         except KeyError:
+            warnings.warn(
+                f"No prior kernel found for '{kernel_id}'; cross-run match rate set to 0.0",
+                stacklevel=2,
+            )
             cross_run_match_rate = 0.0
 
         template = KernelTemplate(

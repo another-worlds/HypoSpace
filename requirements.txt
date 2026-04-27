@@ -4,4 +4,4 @@
 #   pip install hypospace[nnsight]  # live model extraction
 #   pip install hypospace[pyvene]   # real zero-ablation interventions
 #   pip install hypospace[cache]    # diskcache backend
-streamlit
+# UI (optional): pip install -e ".[ui]"   or: pip install streamlit

@@ -88,6 +88,13 @@ class NNSightExtractor:
                 "Install with: pip install nnsight"
             )
 
+    @property
+    def loaded_model(self) -> Any:
+        """Return the loaded nnsight LanguageModel, raising if not yet loaded."""
+        if self._lm is None:
+            raise RuntimeError("Model not loaded — call extract() first")
+        return self._lm
+
     def _load_model(self) -> Any:
         self.require()
         if self._lm is None:

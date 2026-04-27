@@ -10,6 +10,13 @@ from core.config import DecoderConfig, GovernanceConfig, RuntimeConfig
 from interpretability.faithfulness import GovernanceThresholdError
 
 
+def _float_in_unit_interval(value: str) -> float:
+    v = float(value)
+    if not (0.0 <= v <= 1.0):
+        raise argparse.ArgumentTypeError(f"must be in [0, 1], got {v}")
+    return v
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="HypoSpace quickstart CLI")
     parser.add_argument("--model", default="demo-model", help="Model name")
@@ -17,13 +24,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--activations", default="0.1,0.4,-0.2,0.8", help="Comma-separated activation values (raw path)")
     parser.add_argument("--top-k", type=int, default=8, help="How many strongest features to keep")
     parser.add_argument("--device", default="cpu", help="Runtime device")
-    parser.add_argument("--min-faithfulness", type=float, default=0.65, help="Faithfulness threshold")
-    parser.add_argument("--min-stability", type=float, default=0.60, help="Stability threshold")
+    parser.add_argument("--min-faithfulness", type=_float_in_unit_interval, default=0.65, help="Faithfulness threshold")
+    parser.add_argument("--min-stability", type=_float_in_unit_interval, default=0.60, help="Stability threshold")
     parser.add_argument("--fail-on-low-confidence", action="store_true", help="Fail command if governance thresholds are not met")
     parser.add_argument("--version", default="0.1.0", help="Kernel version tag")
     parser.add_argument("--diagnostics", action="store_true", help="Run deep diagnostics and print JSON report; ignores all other flags")
-    parser.add_argument("--high-intensity-threshold", type=float, default=0.8, help="Score threshold for 'high-intensity' label")
-    parser.add_argument("--medium-intensity-threshold", type=float, default=0.4, help="Score threshold for 'medium-intensity' label")
+    parser.add_argument("--high-intensity-threshold", type=_float_in_unit_interval, default=0.8, help="Score threshold for 'high-intensity' label")
+    parser.add_argument("--medium-intensity-threshold", type=_float_in_unit_interval, default=0.4, help="Score threshold for 'medium-intensity' label")
     # Live-model extraction flags (require nnsight + torch)
     parser.add_argument("--layer-path", default=None, help="Dot-notation path into model for live extraction (e.g. transformer.h.0); if set, --inputs is required and --activations is ignored")
     parser.add_argument("--inputs", default=None, help="Text input for live model extraction (used with --layer-path)")
