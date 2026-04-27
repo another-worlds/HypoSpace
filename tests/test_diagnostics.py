@@ -25,6 +25,7 @@ _EXPECTED_SUBSYSTEMS = {
     "governance",
     "nnsight",
     "pyvene",
+    "sae_backend",
 }
 
 _VALID_STATUSES = {"ok", "degraded", "failed", "skipped"}
@@ -71,7 +72,7 @@ def test_no_uncaught_exception():
 
 def test_dependencies_all_present_in_report(report):
     found = {d.name for d in report.dependencies}
-    assert found == {"torch", "nnsight", "pyvene", "diskcache"}
+    assert found == {"torch", "nnsight", "pyvene", "diskcache", "sae_backend"}
 
 
 def test_dependency_status_is_bool(report):
@@ -199,3 +200,37 @@ def test_cli_diagnostics_flag():
     parsed = json.loads(result.stdout)
     assert "overall_status" in parsed
     assert "probes" in parsed
+
+
+# ---------------------------------------------------------------------------
+# sae_backend probe
+# ---------------------------------------------------------------------------
+
+def test_sae_backend_probe_present_in_report(report):
+    probe = _get_probe(report, "sae_backend")
+    assert probe is not None
+    assert probe.status in _VALID_STATUSES
+
+
+def test_sae_backend_probe_skipped_without_torch(monkeypatch):
+    import importlib.util as _ilu
+    original_find_spec = _ilu.find_spec
+
+    def _patched_find_spec(name, *args, **kwargs):
+        if name == "torch":
+            return None
+        return original_find_spec(name, *args, **kwargs)
+
+    monkeypatch.setattr(_ilu, "find_spec", _patched_find_spec)
+    from diagnostics import _probe_sae_backend
+    import tempfile, pathlib
+    with tempfile.TemporaryDirectory() as tmp:
+        probe = _probe_sae_backend(pathlib.Path(tmp) / "sae")
+    assert probe.status == "skipped"
+
+
+def test_sae_backend_dependency_status_present(report):
+    names = [d.name for d in report.dependencies]
+    assert "sae_backend" in names
+    dep = next(d for d in report.dependencies if d.name == "sae_backend")
+    assert isinstance(dep.available, bool)

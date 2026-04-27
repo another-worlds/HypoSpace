@@ -14,7 +14,7 @@ from typing import List
 
 from data.utils import utc_timestamp
 
-DIAGNOSTICS_VERSION = "1.0.0"
+DIAGNOSTICS_VERSION = "1.1.0"
 _SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")
 
 
@@ -61,6 +61,12 @@ def _detect_dependencies() -> List[DependencyStatus]:
         available = importlib.util.find_spec(name) is not None
         note = "" if available else f"install with: pip install {name}"
         result.append(DependencyStatus(name=name, available=available, note=note))
+    torch_avail = importlib.util.find_spec("torch") is not None
+    result.append(DependencyStatus(
+        name="sae_backend",
+        available=torch_avail,
+        note="" if torch_avail else "SAE backends require torch: pip install torch",
+    ))
     return result
 
 
@@ -714,6 +720,75 @@ def _probe_pyvene(tmp_dir: Path) -> ProbeResult:
     return ProbeResult("pyvene", status, round(latency_ms, 3), checks, warnings, errors)
 
 
+def _probe_sae_backend(tmp_dir: Path) -> ProbeResult:
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    start = time.monotonic()
+
+    torch_avail = importlib.util.find_spec("torch") is not None
+    if not torch_avail:
+        latency_ms = (time.monotonic() - start) * 1000.0
+        msg = "torch not installed — SAE backends require torch: pip install torch"
+        return ProbeResult("sae_backend", "skipped", round(latency_ms, 3), [], [msg], [])
+
+    checks: List[CheckDetail] = []
+    warnings: List[str] = []
+    errors: List[str] = []
+    try:
+        from data.sae_backend import MagnitudeBackend, build_backend, sae_available
+        from core.hierarchy import FeatureBackend, HierarchyEngine
+
+        checks.append(CheckDetail("import_succeeds", True, "data.sae_backend imported"))
+
+        avail = sae_available()
+        checks.append(CheckDetail("sae_available_returns_true", avail, f"sae_available()={avail}"))
+        if not avail:
+            errors.append("sae_available() returned False despite torch being installed")
+
+        none_result = build_backend("matryoshka", None, "cpu")
+        none_ok = none_result is None
+        checks.append(CheckDetail("build_backend_none_path_returns_none", none_ok, f"result={none_result!r}"))
+        if not none_ok:
+            errors.append("build_backend with sae_path=None should return None")
+
+        mb = MagnitudeBackend()
+        feats = mb.extract([0.5, -0.3, 0.1], "sae-probe-layer", 2)
+        feat_ok = len(feats) == 2 and feats[0].source_index == 0
+        checks.append(CheckDetail(
+            "magnitude_backend_extract",
+            feat_ok,
+            f"features={[(f.source_index, f.score) for f in feats]}",
+        ))
+        if not feat_ok:
+            errors.append(f"MagnitudeBackend.extract() returned unexpected features: {feats}")
+
+        protocol_ok = isinstance(mb, FeatureBackend)
+        checks.append(CheckDetail(
+            "magnitude_backend_satisfies_protocol",
+            protocol_ok,
+            f"isinstance(MagnitudeBackend(), FeatureBackend)={protocol_ok}",
+        ))
+        if not protocol_ok:
+            errors.append("MagnitudeBackend does not satisfy FeatureBackend protocol")
+
+        engine = HierarchyEngine(backend="matryoshka", feature_backend=mb)
+        injected_feats = engine.extract_features([0.3, 0.7, -0.1], layer="diag-layer", top_k=2)
+        injection_ok = len(injected_feats) == 2
+        checks.append(CheckDetail(
+            "feature_backend_injection_works",
+            injection_ok,
+            f"injected MagnitudeBackend returned {len(injected_feats)} features",
+        ))
+        if not injection_ok:
+            errors.append(f"Injected backend returned wrong feature count: {len(injected_feats)}")
+
+    except Exception as exc:
+        errors.append(f"probe crashed: {exc}")
+
+    latency_ms = (time.monotonic() - start) * 1000.0
+    status = "failed" if errors else ("degraded" if warnings else "ok")
+    return ProbeResult("sae_backend", status, round(latency_ms, 3), checks, warnings, errors)
+
+
 def run_diagnostics() -> DiagnosticsReport:
     with tempfile.TemporaryDirectory() as _tmp:
         tmp_dir = Path(_tmp)
@@ -729,6 +804,7 @@ def run_diagnostics() -> DiagnosticsReport:
             _probe_governance(tmp_dir / "governance"),
             _probe_nnsight(tmp_dir / "nnsight"),
             _probe_pyvene(tmp_dir / "pyvene"),
+            _probe_sae_backend(tmp_dir / "sae_backend"),
         ]
     return DiagnosticsReport(
         schema_version=DIAGNOSTICS_VERSION,

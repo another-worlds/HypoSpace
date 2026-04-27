@@ -283,3 +283,43 @@ def test_decode_first_run_match_rate_is_zero(tmp_path: Path) -> None:
     decoder = RealityDecoder(config=DecoderConfig(runtime=RuntimeConfig(cache_dir=str(tmp_path))))
     result = decoder.decode("fresh-model", "layer_0", [0.1, 0.4, -0.2, 0.8])
     assert result.metadata["cross_run_match_rate"] == "0.000"
+
+
+# ---------------------------------------------------------------------------
+# FeatureBackend Protocol + HierarchyEngine injection (stdlib-only, no torch)
+# ---------------------------------------------------------------------------
+
+def test_hierarchy_engine_no_backend_falls_back_to_magnitude() -> None:
+    engine = HierarchyEngine(backend="matryoshka", feature_backend=None)
+    feats = engine.extract_features([0.3, -0.9, 0.1], layer="l", top_k=2)
+    assert len(feats) == 2
+    assert feats[0].source_index == 1  # abs(-0.9) is largest
+
+
+def test_hierarchy_engine_injected_backend_is_called() -> None:
+    class _FixedBackend:
+        def extract(self, activations, layer, top_k):
+            return [Feature(id="fixed:sae:0:99", layer=layer, score=1.0, source_index=99)]
+
+    engine = HierarchyEngine(feature_backend=_FixedBackend())
+    feats = engine.extract_features([0.1, 0.2, 0.3], layer="test-layer", top_k=3)
+    assert len(feats) == 1
+    assert feats[0].source_index == 99
+
+
+def test_feature_backend_protocol_runtime_checkable() -> None:
+    from core.hierarchy import FeatureBackend
+    from data.sae_backend import MagnitudeBackend
+    assert isinstance(MagnitudeBackend(), FeatureBackend)
+
+
+def test_magnitude_backend_extract_top_k_clipped() -> None:
+    from data.sae_backend import MagnitudeBackend
+    feats = MagnitudeBackend().extract([0.1, 0.9, -0.7, 0.5], "l", top_k=2)
+    assert len(feats) == 2
+    assert feats[0].source_index == 1  # 0.9 is highest magnitude
+
+
+def test_magnitude_backend_extract_empty_returns_empty() -> None:
+    from data.sae_backend import MagnitudeBackend
+    assert MagnitudeBackend().extract([], "l", top_k=4) == []

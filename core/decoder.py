@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from typing import Dict, Iterable, List
 
 from core.config import DecoderConfig
-from core.hierarchy import Feature, HierarchyEngine
+from core.hierarchy import Feature, FeatureBackend, HierarchyEngine
 from core.kernel_library import KernelLibrary, KernelTemplate
 from data.utils import utc_timestamp
 
@@ -24,9 +24,14 @@ class DecodeResult:
 class RealityDecoder:
     """Main orchestration entrypoint."""
 
-    def __init__(self, config: DecoderConfig | None = None, kernel_library: KernelLibrary | None = None) -> None:
+    def __init__(
+        self,
+        config: DecoderConfig | None = None,
+        kernel_library: KernelLibrary | None = None,
+        feature_backend: FeatureBackend | None = None,
+    ) -> None:
         self.config = config or DecoderConfig()
-        self.hierarchy = HierarchyEngine(backend=self.config.backend)
+        self.hierarchy = HierarchyEngine(backend=self.config.backend, feature_backend=feature_backend)
         self.kernels = kernel_library or KernelLibrary(root=self.config.runtime.cache_dir)
 
     def decode(

@@ -19,6 +19,7 @@ from interpretability.semantic import SemanticInterpreter
 
 if TYPE_CHECKING:
     from data.nnsight_extractor import NNSightExtractor
+    from data.sae_backend import MatryoshkaBackend
     from diagnostics import DiagnosticsReport
 
 
@@ -35,7 +36,7 @@ class HypoSpaceAPI:
         self.config = config or DecoderConfig()
         self.extractor = ActivationExtractor(cache_dir=self.config.runtime.cache_dir)
         self.preprocessor = ActivationPreprocessor()
-        self.decoder = RealityDecoder(config=self.config)
+        self.decoder = RealityDecoder(config=self.config, feature_backend=self._build_sae_backend())
         self.semantic = SemanticInterpreter(
             high=self.config.high_intensity_threshold,
             medium=self.config.medium_intensity_threshold,
@@ -43,6 +44,18 @@ class HypoSpaceAPI:
         self.mechanistic = MechanisticAnalyzer()
         self.faithfulness = FaithfulnessChecker(config=self.config.governance)
         self._nnsight: NNSightExtractor | None = None
+
+    def _build_sae_backend(self):
+        """Construct SAE backend from config; return None on any failure (magnitude fallback)."""
+        try:
+            from data.sae_backend import build_backend
+            return build_backend(
+                backend=self.config.backend,
+                sae_path=self.config.sae_path,
+                device=self.config.runtime.device,
+            )
+        except ImportError:
+            return None
 
     # ------------------------------------------------------------------
     # Path A — raw activations
