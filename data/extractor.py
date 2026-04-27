@@ -34,7 +34,7 @@ class ActivationExtractor:
         layer: str = "unknown-layer",
     ) -> List[float]:
         values = [float(item) for item in raw_activations]
-        cache_key = self._cache_key(values)
+        cache_key = self._cache_key(values, model_name, layer)
 
         if self._dc is not None:
             cached = self._dc.get(cache_key)
@@ -52,7 +52,7 @@ class ActivationExtractor:
         return values
 
     @staticmethod
-    def _cache_key(values: List[float]) -> str:
-        """Content-addressed key: identical activation vectors share one cache entry."""
-        raw = json.dumps({"values": values}, sort_keys=True)
+    def _cache_key(values: List[float], model_name: str, layer: str) -> str:
+        """Content-addressed key scoped to model and layer to avoid cross-model collisions."""
+        raw = json.dumps({"model": model_name, "layer": layer, "values": values}, sort_keys=True)
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]

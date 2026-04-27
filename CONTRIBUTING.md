@@ -14,7 +14,7 @@ This installs the full optional stack: torch (CPU), nnsight, pyvene, diskcache, 
 ## Running tests
 
 ```bash
-# Full suite — all 96 tests (requires full optional stack)
+# Full suite — all 108 tests (requires full optional stack)
 python -m pytest -q
 
 # Targeted test module
@@ -45,7 +45,7 @@ Examples: `fix/nan-guard`, `feat/usae-backend`, `docs/contributing`
 
 ## PR expectations
 
-- `python -m pytest -q` must pass (96/96 or more)
+- `python -m pytest -q` must pass (108/108 or more)
 - `python main.py --diagnostics` must show no new errors
 - No new `object` type annotations in any module
 - One-line module docstring in every new source file

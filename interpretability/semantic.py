@@ -9,7 +9,11 @@ from core.hierarchy import Feature
 
 
 class SemanticInterpreter:
-    """Intensity-band semantic interpreter (high ≥ 0.8, medium ≥ 0.4, low < 0.4)."""
+    """Intensity-band semantic interpreter with configurable high/medium thresholds."""
+
+    def __init__(self, high: float = 0.8, medium: float = 0.4) -> None:
+        self._high = high
+        self._medium = medium
 
     def annotate(self, features: Iterable[Feature]) -> List[Feature]:
         enriched: List[Feature] = []
@@ -20,10 +24,9 @@ class SemanticInterpreter:
             enriched.append(feature)
         return enriched
 
-    @staticmethod
-    def _intensity_band(score: float) -> str:
-        if score >= 0.8:
+    def _intensity_band(self, score: float) -> str:
+        if score >= self._high:
             return "high-intensity"
-        if score >= 0.4:
+        if score >= self._medium:
             return "medium-intensity"
         return "low-intensity"

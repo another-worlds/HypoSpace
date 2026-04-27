@@ -30,5 +30,7 @@ class DecoderConfig:
 
     backend: str = "matryoshka"
     top_k: int = 8
+    high_intensity_threshold: float = 0.8
+    medium_intensity_threshold: float = 0.4
     runtime: RuntimeConfig = field(default_factory=RuntimeConfig)
     governance: GovernanceConfig = field(default_factory=GovernanceConfig)

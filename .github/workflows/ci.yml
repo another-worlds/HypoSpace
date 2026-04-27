@@ -79,8 +79,8 @@ jobs:
           pip install pytest torch --index-url https://download.pytorch.org/whl/cpu
           pip install nnsight
 
-      - name: Run stdlib + pyvene tests
-        run: pytest tests/test_smoke.py tests/test_contracts.py tests/test_regression.py tests/test_diagnostics.py tests/test_pyvene.py -v
+      - name: Run stdlib + pyvene + nnsight tests
+        run: pytest tests/test_smoke.py tests/test_contracts.py tests/test_regression.py tests/test_diagnostics.py tests/test_pyvene.py tests/test_nnsight.py -v
 
   # ------------------------------------------------------------------ #
   # Linting (CI03)                                                      #
