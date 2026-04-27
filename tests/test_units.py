@@ -91,6 +91,29 @@ def test_score_just_below_medium_boundary() -> None:
     assert "low-intensity" in labeled[0].label  # type: ignore[index]
 
 
+def test_custom_high_threshold_reclassifies_score() -> None:
+    interp = SemanticInterpreter(high=0.5, medium=0.2)
+    feat = Feature(id="f", layer="l", score=0.6, source_index=0)
+    labeled = interp.annotate([feat])
+    assert "high-intensity" in labeled[0].label  # type: ignore[index]
+
+
+def test_custom_medium_threshold_reclassifies_score() -> None:
+    interp = SemanticInterpreter(high=0.9, medium=0.3)
+    feat = Feature(id="f", layer="l", score=0.5, source_index=0)
+    labeled = interp.annotate([feat])
+    assert "medium-intensity" in labeled[0].label  # type: ignore[index]
+
+
+def test_thresholds_from_config_propagate() -> None:
+    from api import HypoSpaceAPI
+    from core.config import DecoderConfig
+    api = HypoSpaceAPI(config=DecoderConfig(high_intensity_threshold=0.5, medium_intensity_threshold=0.2))
+    feat = Feature(id="f", layer="l", score=0.6, source_index=0)
+    labeled = api.semantic.annotate([feat])
+    assert "high-intensity" in labeled[0].label  # type: ignore[index]
+
+
 def test_existing_label_not_overwritten() -> None:
     feat = Feature(id="f", layer="l", score=0.9, source_index=0, label="keep-me")
     labeled = SemanticInterpreter().annotate([feat])
@@ -145,3 +168,77 @@ def test_different_inputs_different_cache_entries(tmp_path: Path) -> None:
     a = ex.extract([0.1, 0.5], "model", "layer")
     b = ex.extract([0.9, 0.2], "model", "layer")
     assert a != b
+
+
+def test_cache_key_differs_by_model(tmp_path: Path) -> None:
+    key_a = ActivationExtractor._cache_key([0.1, 0.5], "model-a", "layer")
+    key_b = ActivationExtractor._cache_key([0.1, 0.5], "model-b", "layer")
+    assert key_a != key_b
+
+
+def test_cache_key_differs_by_layer(tmp_path: Path) -> None:
+    key_a = ActivationExtractor._cache_key([0.1, 0.5], "model", "layer-0")
+    key_b = ActivationExtractor._cache_key([0.1, 0.5], "model", "layer-1")
+    assert key_a != key_b
+
+
+def test_cache_key_same_for_identical_inputs() -> None:
+    key_a = ActivationExtractor._cache_key([0.1, 0.5], "model", "layer")
+    key_b = ActivationExtractor._cache_key([0.1, 0.5], "model", "layer")
+    assert key_a == key_b
+
+
+# ---------------------------------------------------------------------------
+# KernelLibrary — corrupt file handling
+# ---------------------------------------------------------------------------
+
+def test_load_corrupt_kernel_raises_value_error(tmp_path: Path) -> None:
+    corrupt = tmp_path / "bad-model-layer-1.0.0.json"
+    corrupt.write_text("{not valid json", encoding="utf-8")
+    lib = KernelLibrary(root=tmp_path)
+    with pytest.raises(ValueError, match="Corrupt kernel artifact"):
+        lib.load("bad-model-layer", "1.0.0")
+
+
+# ---------------------------------------------------------------------------
+# HypoSpaceAPI — input validation
+# ---------------------------------------------------------------------------
+
+def test_empty_model_name_raises(tmp_path: Path) -> None:
+    from api import HypoSpaceAPI
+    from core.config import DecoderConfig, RuntimeConfig
+    api = HypoSpaceAPI(config=DecoderConfig(runtime=RuntimeConfig(cache_dir=str(tmp_path))))
+    with pytest.raises(ValueError, match="model_name"):
+        api.decode("", "layer_0", [0.1, 0.2])
+
+
+def test_empty_layer_raises(tmp_path: Path) -> None:
+    from api import HypoSpaceAPI
+    from core.config import DecoderConfig, RuntimeConfig
+    api = HypoSpaceAPI(config=DecoderConfig(runtime=RuntimeConfig(cache_dir=str(tmp_path))))
+    with pytest.raises(ValueError, match="layer"):
+        api.decode("model", "", [0.1, 0.2])
+
+
+def test_invalid_semver_raises(tmp_path: Path) -> None:
+    from api import HypoSpaceAPI
+    from core.config import DecoderConfig, RuntimeConfig
+    api = HypoSpaceAPI(config=DecoderConfig(runtime=RuntimeConfig(cache_dir=str(tmp_path))))
+    with pytest.raises(ValueError, match="semver"):
+        api.decode("model", "layer", [0.1, 0.2], version="not-a-version")
+
+
+def test_valid_semver_passes(tmp_path: Path) -> None:
+    from api import HypoSpaceAPI
+    from core.config import DecoderConfig, RuntimeConfig
+    api = HypoSpaceAPI(config=DecoderConfig(runtime=RuntimeConfig(cache_dir=str(tmp_path))))
+    result = api.decode("model", "layer", [0.1, 0.2], version="1.2.3")
+    assert result is not None
+
+
+def test_oversized_activations_raises(tmp_path: Path) -> None:
+    from api import HypoSpaceAPI
+    from core.config import DecoderConfig, RuntimeConfig
+    api = HypoSpaceAPI(config=DecoderConfig(runtime=RuntimeConfig(cache_dir=str(tmp_path), max_features=4)))
+    with pytest.raises(ValueError, match="max_features"):
+        api.decode("model", "layer", [0.1, 0.2, 0.3, 0.4, 0.5])

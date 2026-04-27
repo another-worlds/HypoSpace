@@ -45,7 +45,10 @@ class KernelLibrary:
         input_path = self.root / f"{kernel_id}-{version}.json"
         if not input_path.exists():
             raise FileNotFoundError(f"Kernel artifact not found: {input_path}")
-        data = json.loads(input_path.read_text(encoding="utf-8"))
+        try:
+            data = json.loads(input_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Corrupt kernel artifact at {input_path}: {exc}") from exc
         features = [Feature(**item) for item in data.pop("features", [])]
         return KernelTemplate(features=features, **data)
 

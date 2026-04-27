@@ -2,8 +2,11 @@ from __future__ import annotations
 
 """Public one-call façade: HypoSpaceAPI orchestrates decode, score, and diagnostics workflows."""
 
+import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Iterable, Union
+
+_SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")
 
 from core.config import DecoderConfig
 from core.decoder import DecodeResult, RealityDecoder
@@ -33,7 +36,10 @@ class HypoSpaceAPI:
         self.extractor = ActivationExtractor(cache_dir=self.config.runtime.cache_dir)
         self.preprocessor = ActivationPreprocessor()
         self.decoder = RealityDecoder(config=self.config)
-        self.semantic = SemanticInterpreter()
+        self.semantic = SemanticInterpreter(
+            high=self.config.high_intensity_threshold,
+            medium=self.config.medium_intensity_threshold,
+        )
         self.mechanistic = MechanisticAnalyzer()
         self.faithfulness = FaithfulnessChecker(config=self.config.governance)
         self._nnsight: NNSightExtractor | None = None
@@ -48,6 +54,17 @@ class HypoSpaceAPI:
         if bad:
             raise ValueError(f"raw_activations contains non-finite values: {bad[:3]!r}")
 
+    def _validate_decode_args(self, model_name: str, layer: str, version: str, values: list[float]) -> None:
+        if not model_name.strip():
+            raise ValueError("model_name must be a non-empty string")
+        if not layer.strip():
+            raise ValueError("layer must be a non-empty string")
+        if not _SEMVER_RE.match(version):
+            raise ValueError(f"version must be semver (X.Y.Z), got {version!r}")
+        max_features = self.config.runtime.max_features
+        if len(values) > max_features:
+            raise ValueError(f"activations length {len(values)} exceeds max_features={max_features}")
+
     def decode(
         self,
         model_name: str,
@@ -56,6 +73,7 @@ class HypoSpaceAPI:
         version: str = "0.1.0",
     ) -> DecodeResult:
         floats = [float(v) for v in raw_activations]
+        self._validate_decode_args(model_name, layer, version, floats)
         self._check_finite(floats)
         values = self.preprocessor.normalize(
             self.extractor.extract(

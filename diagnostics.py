@@ -373,7 +373,7 @@ def _probe_extractor(tmp_dir: Path) -> ProbeResult:
         if not dc_used:
             warnings.append("diskcache unavailable — using plain JSON cache (collision risk at scale)")
 
-        key = ex._cache_key([0.1, 0.5])
+        key = ex._cache_key([0.1, 0.5], "diag-model", "diag-layer")
         key_ok = isinstance(key, str) and len(key) == 16
         checks.append(CheckDetail("cache_key_length", key_ok, f"key='{key}' ({len(key)} chars)"))
         if not key_ok:
