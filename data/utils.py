@@ -17,5 +17,10 @@ def resolve_layer(model: Any, layer_path: str) -> Any:
     """
     node = model
     for part in layer_path.split("."):
-        node = node[int(part)] if part.isdigit() else getattr(node, part)
+        try:
+            node = node[int(part)] if part.isdigit() else getattr(node, part)
+        except (AttributeError, IndexError, TypeError) as exc:
+            raise ValueError(
+                f"resolve_layer: cannot traverse '{part}' in path '{layer_path}'"
+            ) from exc
     return node

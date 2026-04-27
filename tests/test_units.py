@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import types
 from pathlib import Path
 
 import pytest
@@ -9,6 +10,7 @@ from core.hierarchy import Feature, HierarchyEngine
 from core.kernel_library import KernelLibrary
 from data.extractor import ActivationExtractor
 from data.preprocessor import ActivationPreprocessor
+from data.utils import resolve_layer
 from interpretability.faithfulness import FaithfulnessChecker
 from interpretability.mechanistic import InterventionResult
 from interpretability.semantic import SemanticInterpreter
@@ -242,3 +244,42 @@ def test_oversized_activations_raises(tmp_path: Path) -> None:
     api = HypoSpaceAPI(config=DecoderConfig(runtime=RuntimeConfig(cache_dir=str(tmp_path), max_features=4)))
     with pytest.raises(ValueError, match="max_features"):
         api.decode("model", "layer", [0.1, 0.2, 0.3, 0.4, 0.5])
+
+
+# ---------------------------------------------------------------------------
+# resolve_layer — valid paths, list indexing, invalid path raises ValueError
+# ---------------------------------------------------------------------------
+
+def test_resolve_layer_attribute_path() -> None:
+    model = types.SimpleNamespace(transformer=types.SimpleNamespace(h=["block0", "block1"]))
+    assert resolve_layer(model, "transformer.h.0") == "block0"
+
+
+def test_resolve_layer_integer_index() -> None:
+    model = types.SimpleNamespace(layers=["a", "b", "c"])
+    assert resolve_layer(model, "layers.2") == "c"
+
+
+def test_resolve_layer_bad_attribute_raises_value_error() -> None:
+    model = types.SimpleNamespace()
+    with pytest.raises(ValueError, match="resolve_layer"):
+        resolve_layer(model, "nonexistent.path")
+
+
+def test_resolve_layer_bad_index_raises_value_error() -> None:
+    model = types.SimpleNamespace(h=["only_one"])
+    with pytest.raises(ValueError, match="resolve_layer"):
+        resolve_layer(model, "h.99")
+
+
+# ---------------------------------------------------------------------------
+# RealityDecoder — cross-run match KeyError path (first run, no prior kernel)
+# ---------------------------------------------------------------------------
+
+def test_decode_first_run_match_rate_is_zero(tmp_path: Path) -> None:
+    from core.config import DecoderConfig, RuntimeConfig
+    from core.decoder import RealityDecoder
+
+    decoder = RealityDecoder(config=DecoderConfig(runtime=RuntimeConfig(cache_dir=str(tmp_path))))
+    result = decoder.decode("fresh-model", "layer_0", [0.1, 0.4, -0.2, 0.8])
+    assert result.metadata["cross_run_match_rate"] == "0.000"

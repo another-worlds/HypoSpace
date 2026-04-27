@@ -207,7 +207,7 @@ class HypoSpaceAPI:
             import torch  # noqa: F401
             nnsight_ex = self._nnsight_extractor(model_name)
             runner = PyVeneInterventionRunner(
-                lm=nnsight_ex._lm,
+                lm=nnsight_ex.loaded_model,
                 layer_path=layer_path,
                 device=self.config.runtime.device,
             )

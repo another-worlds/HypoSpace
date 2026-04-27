@@ -2,6 +2,7 @@ from __future__ import annotations
 
 """PyVeneInterventionRunner: real zero-ablation interventions via pyvene or PyTorch hooks."""
 
+import warnings
 from typing import Any, Iterable, List, Union
 
 from core.hierarchy import Feature
@@ -201,4 +202,8 @@ def _layer_index(layer_path: str) -> int:
     for part in layer_path.split("."):
         if part.isdigit():
             return int(part)
+    warnings.warn(
+        f"No integer segment found in layer_path '{layer_path}'; defaulting layer index to 0",
+        stacklevel=2,
+    )
     return 0
