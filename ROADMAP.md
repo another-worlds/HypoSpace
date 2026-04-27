@@ -82,6 +82,7 @@ Backlog items shipped after MVP:
 | pyvene interventions | ✅ Done | `PyVeneInterventionRunner` in `data/pyvene_runner.py`; provides real zero-ablation when torch is available; `MechanisticAnalyzer` 50% stub remains as CPU fallback |
 | diskcache / CI-CD | ✅ Done | GitHub Actions added; cache layer updated |
 | Full dep stack documented | ✅ Done | torch + nnsight + pyvene + diskcache install path documented in README, QUICKSTART, CLAUDE.md, and requirements-dev.txt; two-level install (minimal vs full) with capability table |
+| SAE backend wiring | ✅ Done | `data/sae_backend.py` — `FeatureBackend` protocol, `MagnitudeBackend` (stdlib), `MatryoshkaBackend` (torch; matryoshka/topk/jumprelu); `DecoderConfig.sae_path` selects checkpoint; `None` → magnitude fallback; diagnostics schema `1.1.0` with `_probe_sae_backend` |
 
 ---
 

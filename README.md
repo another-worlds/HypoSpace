@@ -122,12 +122,13 @@ The current project is organized as follows:
 - `core/`
   - `config.py` — runtime/decoder/governance configuration models.
   - `decoder.py` — decode pipeline entrypoint.
-  - `hierarchy.py` — top-k magnitude-based feature ranking; placeholder for future SAE backend dispatch.
+  - `hierarchy.py` — `FeatureBackend` protocol, `HierarchyEngine` dispatch; magnitude top-k fallback when no SAE configured.
   - `kernel_library.py` — kernel templates, save/load, and matching utilities.
 - `data/`
   - `extractor.py` — activation extraction and SHA256-keyed disk cache.
   - `nnsight_extractor.py` — live extraction from HuggingFace models via nnsight tracing.
   - `pyvene_runner.py` — zero-ablation interventions via pyvene/hooks.
+  - `sae_backend.py` — SAE feature extraction: `MagnitudeBackend` (stdlib), `MatryoshkaBackend` (torch), `build_backend()` factory.
   - `preprocessor.py` — normalization and preprocessing transforms.
   - `utils.py` — UTC timestamp helper.
 - `interpretability/`

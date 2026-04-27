@@ -18,13 +18,14 @@ HypoSpace/
 ├── core/
 │   ├── config.py                # DecoderConfig, RuntimeConfig, GovernanceConfig
 │   ├── decoder.py               # RealityDecoder — orchestrates the decode pipeline
-│   ├── hierarchy.py             # HierarchyEngine + Feature dataclass — magnitude-based top-k ranking (SAE backend placeholder; `backend` field unused)
+│   ├── hierarchy.py             # HierarchyEngine + Feature dataclass + FeatureBackend Protocol — dispatches to SAE or magnitude fallback
 │   └── kernel_library.py        # KernelLibrary — semver-versioned JSON persistence
 ├── data/
 │   ├── extractor.py             # ActivationExtractor — disk cache (SHA256 keys)
 │   ├── nnsight_extractor.py     # NNSightExtractor — live extraction via nnsight model tracing
 │   ├── preprocessor.py          # ActivationPreprocessor — max-abs normalization
 │   ├── pyvene_runner.py         # PyVeneInterventionRunner — real zero-ablation via pyvene/hooks
+│   ├── sae_backend.py           # MagnitudeBackend, MatryoshkaBackend, build_backend() — SAE inference (torch-optional)
 │   └── utils.py                 # utc_timestamp() helper, resolve_layer() dot-notation traversal
 ├── interpretability/
 │   ├── semantic.py              # SemanticInterpreter — intensity-band auto-labels
@@ -34,14 +35,15 @@ HypoSpace/
 │   ├── streamlit_app.py         # Streamlit 3-tab interactive UI
 │   └── canvas.py                # SemanticCanvas — feature points and nearest-neighbor edges
 └── tests/
-    ├── test_smoke.py            # E2E integration tests (5 tests)
+    ├── test_smoke.py            # E2E integration tests (6 tests)
     ├── test_contracts.py        # JSON payload structure contracts (2 tests)
     ├── test_regression.py       # Fixed mini-set regression + KPI guard (10 tests: 9 fixture cases + 1 KPI guard)
     ├── test_nnsight.py          # nnsight live extraction tests (11 tests; skipped if nnsight/torch absent)
     ├── test_pyvene.py           # PyVeneInterventionRunner tests (8 tests; skipped if torch absent)
-    ├── test_diagnostics.py      # diagnostics module tests (33 tests)
+    ├── test_sae_backend.py      # SAE backend tests (10 tests; skipped if torch absent)
+    ├── test_diagnostics.py      # diagnostics module tests (37 tests)
     ├── test_canvas.py           # SemanticCanvas edge-case tests (7 tests)
-    ├── test_units.py            # negative-path and boundary-value unit tests (37 tests)
+    ├── test_units.py            # negative-path and boundary-value unit tests (42 tests)
     └── fixtures/
         └── mini_regression_set.json
 ```
@@ -53,7 +55,7 @@ HypoSpace/
 raw_activations
   → ActivationExtractor    (disk cache, SHA256 key)
   → ActivationPreprocessor (max-abs normalization)
-  → RealityDecoder → HierarchyEngine  (top-k by magnitude)
+  → RealityDecoder → HierarchyEngine  (SAE via MatryoshkaBackend if sae_path set, else magnitude top-k)
   → KernelLibrary          (save artifact, compute cross-run match rate)
   → SemanticInterpreter    (intensity-band labels)
   → DecodeResult                         ← decode() stops here
@@ -203,8 +205,9 @@ Configuration flows from `core/config.py` dataclasses. All fields have sensible 
 from core.config import DecoderConfig, RuntimeConfig, GovernanceConfig
 
 config = DecoderConfig(
-    backend="matryoshka",           # SAE backend (only "matryoshka" implemented in MVP)
+    backend="matryoshka",           # "matryoshka" | "topk" | "jumprelu" | "magnitude"
     top_k=8,                        # Number of top features to extract
+    sae_path=None,                  # Path to SAE checkpoint dir/file; None → magnitude fallback
     high_intensity_threshold=0.8,   # Score ≥ this → "high-intensity" label
     medium_intensity_threshold=0.4, # Score ≥ this → "medium-intensity" label
     runtime=RuntimeConfig(
@@ -231,7 +234,9 @@ All data structures are `@dataclass(slots=True)` — do **not** add `__dict__`-b
 
 | Dataclass | Location | Purpose |
 |---|---|---|
-| `Feature` | `core/hierarchy.py` | Single extracted concept: `id`, `layer`, `score`, `source_index`, `label` |
+| `Feature` | `core/hierarchy.py` | Single extracted concept: `id`, `layer`, `score`, `source_index`, `label` (id uses `:sae:` infix when SAE backend active) |
+| `FeatureBackend` | `core/hierarchy.py` | `@runtime_checkable` Protocol — `extract(activations, layer, top_k) -> list[Feature]`; satisfied by `MagnitudeBackend` and `MatryoshkaBackend` |
+| `SAEEncodeResult` | `data/sae_backend.py` | Raw sparse SAE output: `feature_indices`, `feature_scores` — intermediate before `Feature` construction |
 | `DecodeResult` | `core/decoder.py` | Output of decode step: `model_name`, `layer`, `features[]`, `kernel_path`, `metadata{}` |
 | `KernelTemplate` | `core/kernel_library.py` | Persisted artifact with semver `version` and feature list |
 | `InterventionResult` | `interpretability/mechanistic.py` | `feature_id`, `baseline`, `ablated`, `effect_size` |
@@ -252,7 +257,7 @@ All data structures are `@dataclass(slots=True)` — do **not** add `__dict__`-b
 - One primary class per file; related dataclasses may share a file (see `config.py`)
 - `snake_case` for functions/variables/modules, `PascalCase` for classes, `UPPER_CASE` for module-level constants
 - Private helpers prefixed with `_` (e.g., `_intensity_band`, `_cache_key`)
-- Stdlib only in all modules except `viz/` (Streamlit), `data/nnsight_extractor.py` (nnsight + torch), `data/pyvene_runner.py` (pyvene + torch), and `tests/` (pytest)
+- Stdlib only in all modules except `viz/` (Streamlit), `data/nnsight_extractor.py` (nnsight + torch), `data/pyvene_runner.py` (pyvene + torch), `data/sae_backend.py` (torch — optional, with magnitude fallback), and `tests/` (pytest)
 - JSON with UTF-8 encoding for all persisted artifacts
 - Timestamps always via `data.utils.utc_timestamp()` (UTC ISO format)
 
@@ -277,18 +282,19 @@ Artifacts are stored under `.hypo_cache/` (configurable via `RuntimeConfig.cache
 ## Testing
 
 ```bash
-python -m pytest -q    # 94 stdlib-only tests always pass; 113 total when all optional deps installed
+python -m pytest -q    # 103 stdlib-only tests always pass; 133 total when all optional deps installed
 ```
 
 **Test modules:**
-- `test_smoke.py` — Full E2E pipeline, semver loading, kernel match/merge, merge semantics, governance errors (5 tests)
+- `test_smoke.py` — Full E2E pipeline, semver loading, kernel match/merge, merge semantics, governance errors, SAE fallback (6 tests)
 - `test_contracts.py` — Validates JSON payload keys/types for kernel artifacts and canvas output (2 tests)
 - `test_regression.py` — Parametrized against `tests/fixtures/mini_regression_set.json`; KPI guard requires ≥80% mechanistic coverage of top features (10 tests)
 - `test_nnsight.py` — Live extraction via `NNSightExtractor` and `decode_from_model()`; entire module is skipped when nnsight/torch are not installed (11 tests)
 - `test_pyvene.py` — `PyVeneInterventionRunner` hook-fallback path and effect-size correctness; entire module is skipped when torch is not installed (8 tests)
-- `test_diagnostics.py` — 33 tests covering all 11 probes in `diagnostics.py`, JSON serializability, CLI flag, and `HypoSpaceAPI.diagnostics()` (33 tests)
+- `test_sae_backend.py` — `MagnitudeBackend`, `MatryoshkaBackend`, `build_backend()` factory, API fallback path; entire module is skipped when torch is not installed (10 tests)
+- `test_diagnostics.py` — 37 tests covering all 12 probes in `diagnostics.py`, JSON serializability, CLI flag, and `HypoSpaceAPI.diagnostics()` (37 tests)
 - `test_canvas.py` — `SemanticCanvas` edge cases: empty input, single feature, sort order, edge values (7 tests)
-- `test_units.py` — Negative-path and boundary-value tests for preprocessor, hierarchy, semantic, faithfulness, kernel_library, extractor, input validation, utils, decoder (37 tests)
+- `test_units.py` — Negative-path and boundary-value tests for preprocessor, hierarchy, semantic, faithfulness, kernel_library, extractor, input validation, utils, decoder, FeatureBackend protocol (42 tests)
 
 Tests use `tmp_path` fixtures for isolation. Never modify `tests/fixtures/mini_regression_set.json` without updating expected outputs — this is the regression baseline.
 
@@ -297,14 +303,14 @@ Tests use `tmp_path` fixtures for isolation. Never modify `tests/fixtures/mini_r
 ## Important Patterns and Constraints
 
 **Do:**
-- Add new backends by subclassing/replacing `HierarchyEngine` — the `backend` string in `DecoderConfig` controls dispatch (currently only magnitude-based ranking is implemented; the matryoshka SAE backend is not yet wired)
+- Add new SAE backends by implementing the `FeatureBackend` protocol in `data/sae_backend.py` and adding a branch in `build_backend()` — `api.py` auto-constructs the backend from `DecoderConfig.backend` + `DecoderConfig.sae_path`; `None` sae_path silently falls back to magnitude top-k
 - Use `HypoSpaceAPI` as the integration point for any new workflow; it composes all components
 - Keep all inter-module data passing via the defined dataclasses (no raw dicts between layers)
 - Store new persisted data as JSON in `.hypo_cache/` following the existing manifest pattern
 
 **Don't:**
 - Add external dependencies to `core/` or `interpretability/` — these must remain stdlib-only
-- Add external dependencies to `data/` except in `data/nnsight_extractor.py` (nnsight + torch), `data/pyvene_runner.py` (pyvene + torch), and `data/extractor.py` (diskcache — optional, with JSON fallback), which are the designated optional-dependency modules
+- Add external dependencies to `data/` except in `data/nnsight_extractor.py` (nnsight + torch), `data/pyvene_runner.py` (pyvene + torch), `data/sae_backend.py` (torch — optional, with magnitude fallback), and `data/extractor.py` (diskcache — optional, with JSON fallback), which are the designated optional-dependency modules
 - Change `GovernanceConfig` defaults without updating `test_regression.py` fixture expectations
 - Use `__dict__` or `setattr` on slotted dataclasses
 - Create classes with inheritance hierarchies — the codebase uses composition
@@ -324,5 +330,6 @@ Completed post-MVP integrations:
 - **Live-model CLI** — `--layer-path`, `--inputs`, `--token-index` flags expose `decode_and_score_from_model()` from the command line
 - **Configurable semantic thresholds** — `DecoderConfig.high_intensity_threshold` / `medium_intensity_threshold` control intensity-band labeling; settable via CLI and Python API
 - **Input validation** — `decode()` validates non-empty model/layer, semver version, and `max_features` length; `KernelLibrary.load()` raises `ValueError` on corrupt JSON artifacts
+- **SAE backend wiring** — `data/sae_backend.py` implements `FeatureBackend` protocol with `MagnitudeBackend` (stdlib) and `MatryoshkaBackend` (torch; matryoshka/topk/jumprelu variants); `DecoderConfig.sae_path` selects the checkpoint; `None` silently falls back to magnitude top-k; `api.py` is the sole composition root via `_build_sae_backend()`; diagnostics schema bumped to `1.1.0` with `_probe_sae_backend` as probe #12
 
 KPIs to maintain: time-to-first-insight, concept consistency across runs (cross-run match rate), faithfulness coverage (≥80% of top features have mechanistic checks), CPU viability.

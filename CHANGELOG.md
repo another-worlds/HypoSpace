@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.1.4] — 2026-04-27
+
+### Added
+- `data/sae_backend.py` — new optional-dependency module (torch) implementing the `FeatureBackend` protocol:
+  - `MagnitudeBackend` — stdlib-only magnitude top-k; satisfies the protocol without torch
+  - `SAEEncodeResult` — `@dataclass(slots=True)` intermediate for raw sparse SAE output
+  - `MatryoshkaBackend` — loads a Linear encoder checkpoint (directory `encoder.pt` or single `.pt` file), runs Linear → ReLU → sparse top-k; supports `matryoshka`, `topk`, and `jumprelu` backend strings
+  - `build_backend()` — factory called by `api.py`; returns `None` (magnitude fallback) when torch is absent, `sae_path=None`, or checkpoint load fails (emits `UserWarning`)
+- `core/hierarchy.py`: `FeatureBackend` `@runtime_checkable` Protocol; `_magnitude_top_k()` extracted as module-level function; `HierarchyEngine` accepts `feature_backend: FeatureBackend | None = None` and dispatches to it
+- `core/config.py`: `DecoderConfig.sae_path: str | None = None` — path to SAE checkpoint; `None` triggers silent magnitude fallback
+- `core/decoder.py`: `RealityDecoder.__init__` threads `feature_backend` through to `HierarchyEngine`
+- `api.py`: `HypoSpaceAPI._build_sae_backend()` constructs the backend at init time from config; wired into `RealityDecoder`
+- `diagnostics.py`: `_probe_sae_backend` (probe #12, skips without torch; 6 checks: import, `sae_available()`, `build_backend` null path, `MagnitudeBackend.extract()`, protocol `isinstance`, injection); `sae_backend` `DependencyStatus` entry; schema bumped `1.0.0 → 1.1.0`
+- 20 new tests: 5 in `test_units.py` (protocol/injection, stdlib-only), 10 in new `test_sae_backend.py` (skipped without torch), 1 in `test_smoke.py` (SAE fallback E2E), 4 in `test_diagnostics.py`
+
+### Changed
+- `Feature.id` format: magnitude backend continues `"{layer}:feature:{rank}"`; SAE backend produces `"{layer}:sae:{rank}:{sae_dict_index}"` — machine-readable provenance, no artifact schema change
+- Test suite: 94 → 103 stdlib-only tests; 113 → 133 total with full optional stack
+- `DIAGNOSTICS_VERSION`: `"1.0.0"` → `"1.1.0"`
+
+---
+
 ## [0.1.3] — 2026-04-27
 
 ### Fixed
