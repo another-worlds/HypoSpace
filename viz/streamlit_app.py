@@ -70,10 +70,14 @@ def run() -> None:
     )
     api = HypoSpaceAPI(config=config)
 
-    values = _parse_activations(raw_activations)
-    decode_result = api.decode(model_name=model_name, layer=layer, raw_activations=values)
-    scorecard = api.scorecard(decode_result)
-    interventions = api.mechanistic.run_interventions(decode_result.features)
+    try:
+        values = _parse_activations(raw_activations)
+        decode_result = api.decode(model_name=model_name, layer=layer, raw_activations=values)
+        scorecard = api.scorecard(decode_result)
+        interventions = api.mechanistic.run_interventions(decode_result.features)
+    except Exception as e:
+        st.error(str(e))
+        return
 
     kernel_tab, semantic_tab, governance_tab = st.tabs(
         ["Kernel Explorer", "Semantic Canvas", "Mechanistic Probes + Governance"]

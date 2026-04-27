@@ -113,7 +113,11 @@ class PyVeneInterventionRunner:
         """Zero-ablate source_index using pyvene's ZeroIntervention."""
         try:
             return self._ablate_with_pyvene_impl(inputs, source_index)
-        except Exception:
+        except Exception as exc:
+            warnings.warn(
+                f"pyvene intervention failed ({exc!r}); falling back to hooks",
+                stacklevel=2,
+            )
             return self._ablate_with_hooks(inputs, source_index)
 
     def _ablate_with_pyvene_impl(
