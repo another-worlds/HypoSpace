@@ -41,7 +41,7 @@ HypoSpace/
     ├── test_pyvene.py           # PyVeneInterventionRunner tests (8 tests; skipped if torch absent)
     ├── test_diagnostics.py      # diagnostics module tests (33 tests)
     ├── test_canvas.py           # SemanticCanvas edge-case tests (7 tests)
-    ├── test_units.py            # negative-path and boundary-value unit tests (32 tests)
+    ├── test_units.py            # negative-path and boundary-value unit tests (37 tests)
     └── fixtures/
         └── mini_regression_set.json
 ```
@@ -113,7 +113,7 @@ python main.py --diagnostics
 # pip install -e ".[ui]"   # or: pip install streamlit
 streamlit run viz/streamlit_app.py
 
-# Run all tests (minimal install: 77 pass, 19 skipped; full install: 96 pass, 0 skipped)
+# Run all tests (minimal install: 94 pass, 19 skipped; full install: 113 pass, 0 skipped)
 python -m pytest -q   # reliable in all environments
 # or: pytest -q       # works when pytest is installed in the active venv
 
@@ -277,7 +277,7 @@ Artifacts are stored under `.hypo_cache/` (configurable via `RuntimeConfig.cache
 ## Testing
 
 ```bash
-python -m pytest -q    # 89 stdlib-only tests always pass; 108 total when all optional deps installed
+python -m pytest -q    # 94 stdlib-only tests always pass; 113 total when all optional deps installed
 ```
 
 **Test modules:**
@@ -288,7 +288,7 @@ python -m pytest -q    # 89 stdlib-only tests always pass; 108 total when all op
 - `test_pyvene.py` — `PyVeneInterventionRunner` hook-fallback path and effect-size correctness; entire module is skipped when torch is not installed (8 tests)
 - `test_diagnostics.py` — 33 tests covering all 11 probes in `diagnostics.py`, JSON serializability, CLI flag, and `HypoSpaceAPI.diagnostics()` (33 tests)
 - `test_canvas.py` — `SemanticCanvas` edge cases: empty input, single feature, sort order, edge values (7 tests)
-- `test_units.py` — Negative-path and boundary-value tests for preprocessor, hierarchy, semantic, faithfulness, kernel_library, extractor, input validation (32 tests)
+- `test_units.py` — Negative-path and boundary-value tests for preprocessor, hierarchy, semantic, faithfulness, kernel_library, extractor, input validation, utils, decoder (37 tests)
 
 Tests use `tmp_path` fixtures for isolation. Never modify `tests/fixtures/mini_regression_set.json` without updating expected outputs — this is the regression baseline.
 
