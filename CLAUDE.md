@@ -18,7 +18,7 @@ HypoSpace/
 ├── core/
 │   ├── config.py                # DecoderConfig, RuntimeConfig, GovernanceConfig
 │   ├── decoder.py               # RealityDecoder — orchestrates the decode pipeline
-│   ├── hierarchy.py             # HierarchyEngine + Feature dataclass
+│   ├── hierarchy.py             # HierarchyEngine + Feature dataclass — magnitude-based top-k ranking (SAE backend placeholder; `backend` field unused)
 │   └── kernel_library.py        # KernelLibrary — semver-versioned JSON persistence
 ├── data/
 │   ├── extractor.py             # ActivationExtractor — disk cache (SHA256 keys)
@@ -297,7 +297,7 @@ Tests use `tmp_path` fixtures for isolation. Never modify `tests/fixtures/mini_r
 ## Important Patterns and Constraints
 
 **Do:**
-- Add new backends by subclassing/replacing `HierarchyEngine` — the `backend` string in `DecoderConfig` controls dispatch
+- Add new backends by subclassing/replacing `HierarchyEngine` — the `backend` string in `DecoderConfig` controls dispatch (currently only magnitude-based ranking is implemented; the matryoshka SAE backend is not yet wired)
 - Use `HypoSpaceAPI` as the integration point for any new workflow; it composes all components
 - Keep all inter-module data passing via the defined dataclasses (no raw dicts between layers)
 - Store new persisted data as JSON in `.hypo_cache/` following the existing manifest pattern
