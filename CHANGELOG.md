@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.1.2] — 2026-04-27
+
+### Fixed
+- `ActivationExtractor._cache_key()` now scopes cache entries to `(model_name, layer, values)` — different models with identical activation vectors no longer collide in the cache
+- `KernelLibrary.load()` raises `ValueError` on corrupt JSON artifacts instead of propagating a bare `json.JSONDecodeError`
+
+### Added
+- CLI live-model extraction flags: `--layer-path`, `--inputs`, `--token-index` expose `decode_and_score_from_model()` directly from `main.py`; missing nnsight/torch produces a clear error and exit code 1
+- `DecoderConfig.high_intensity_threshold` and `DecoderConfig.medium_intensity_threshold` make semantic intensity-band labeling configurable (defaults unchanged: 0.8 / 0.4); wired into `SemanticInterpreter`, `HypoSpaceAPI`, and CLI flags `--high-intensity-threshold` / `--medium-intensity-threshold`
+- `HypoSpaceAPI.decode()` validates non-empty `model_name` / `layer`, semver `version` format (`X.Y.Z`), and activation array length against `max_features`
+- `test_nnsight.py` (11 tests) now runs in the `test-with-torch` CI job alongside `test_pyvene.py`
+- 12 new unit tests in `test_units.py` covering cache key scoping, configurable thresholds, corrupt-kernel guard, and input validation
+
+### Changed
+- Test suite: 77 → 89 stdlib-only tests; 96 → 108 total with full optional stack
+
+---
+
 ## [0.1.1] — 2026-04-26
 
 ### Changed

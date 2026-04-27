@@ -38,9 +38,19 @@ Writes kernel artifacts into `.hypo_cache/` (or your configured cache dir).
 
 ## 4) Live model extraction (optional — requires nnsight + torch)
 
+**Via CLI:**
 ```bash
 pip install nnsight torch
-python - <<'EOF'
+python main.py \
+  --model gpt2 \
+  --layer layer_0 \
+  --layer-path transformer.h.0 \
+  --inputs "The quick brown fox" \
+  --token-index -1
+```
+
+**Via Python API:**
+```python
 from api import HypoSpaceAPI
 api = HypoSpaceAPI()
 result = api.decode_and_score_from_model(
@@ -52,7 +62,6 @@ result = api.decode_and_score_from_model(
     version="0.1.0",
 )
 print(result.scorecard)
-EOF
 ```
 
 ## 5) Run Streamlit explorer
@@ -66,6 +75,6 @@ Tabs: Kernel Explorer · Semantic Canvas · Mechanistic Probes + Governance
 ## 6) Run tests
 
 ```bash
-python -m pytest -q    # 77 pass, 19 skipped (minimal install)
-python -m pytest -q    # 96 pass,  0 skipped (full install)
+python -m pytest -q    # 89 pass, 19 skipped (minimal install)
+python -m pytest -q    # 108 pass,  0 skipped (full install)
 ```

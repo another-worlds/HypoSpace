@@ -111,7 +111,7 @@ Logged from the 2026-04-24 distributed-agent review. Issues fixed in the 2026-04
 
 | ID | File | Issue |
 |---|---|---|
-| ISSUE-CI01 ✅ | `.github/workflows/ci.yml` | 19 tests in `test_nnsight.py` and `test_pyvene.py` never run in CI (pyvene now runs; nnsight deferred — requires model download) |
+| ISSUE-CI01 ✅ | `.github/workflows/ci.yml` | 19 tests in `test_nnsight.py` and `test_pyvene.py` never run in CI — both now run in the `test-with-torch` job (HuggingFace model cached via `actions/cache`) |
 | ISSUE-CI02 ✅ | `.github/workflows/ci.yml` | No Python version matrix (only 3.11 tested) |
 | ISSUE-CI03 ✅ | `.github/workflows/ci.yml` | No linting (`ruff`/`flake8`) or type-checking (`mypy`) step |
 | ISSUE-CI04 | `.github/workflows/ci.yml` | No test coverage reporting (deferred — requires external service token) |

@@ -41,7 +41,7 @@ HypoSpace/
     ├── test_pyvene.py           # PyVeneInterventionRunner tests (8 tests; skipped if torch absent)
     ├── test_diagnostics.py      # diagnostics module tests (33 tests)
     ├── test_canvas.py           # SemanticCanvas edge-case tests (7 tests)
-    ├── test_units.py            # negative-path and boundary-value unit tests (20 tests)
+    ├── test_units.py            # negative-path and boundary-value unit tests (32 tests)
     └── fixtures/
         └── mini_regression_set.json
 ```
@@ -83,7 +83,7 @@ model_name + inputs + layer_path
 # Run the CLI (prints JSON to stdout)
 python main.py --model demo-model --layer layer_0 --activations 0.1,0.4,-0.2,0.8
 
-# All CLI flags
+# All CLI flags (raw-activation path)
 python main.py \
   --model demo-model \
   --layer layer_0 \
@@ -92,8 +92,19 @@ python main.py \
   --device cpu \
   --min-faithfulness 0.65 \
   --min-stability 0.60 \
+  --high-intensity-threshold 0.8 \
+  --medium-intensity-threshold 0.4 \
   --version 0.1.0
   # --fail-on-low-confidence   (exit code 2 if thresholds not met)
+
+# Live-model extraction path (requires nnsight + torch)
+python main.py \
+  --model gpt2 \
+  --layer layer_0 \
+  --layer-path transformer.h.0 \
+  --inputs "The quick brown fox" \
+  --token-index -1 \
+  --version 0.1.0
 
 # Run deep subsystem diagnostics (no other flags needed)
 python main.py --diagnostics
@@ -192,8 +203,10 @@ Configuration flows from `core/config.py` dataclasses. All fields have sensible 
 from core.config import DecoderConfig, RuntimeConfig, GovernanceConfig
 
 config = DecoderConfig(
-    backend="matryoshka",     # SAE backend (only "matryoshka" implemented in MVP)
-    top_k=8,                  # Number of top features to extract
+    backend="matryoshka",           # SAE backend (only "matryoshka" implemented in MVP)
+    top_k=8,                        # Number of top features to extract
+    high_intensity_threshold=0.8,   # Score ≥ this → "high-intensity" label
+    medium_intensity_threshold=0.4, # Score ≥ this → "medium-intensity" label
     runtime=RuntimeConfig(
         device="cpu",         # "cpu" or "cuda"
         max_features=2048,
@@ -208,7 +221,7 @@ config = DecoderConfig(
 api = HypoSpaceAPI(config=config)
 ```
 
-The CLI mirrors these fields as flags (`--top-k`, `--min-faithfulness`, etc.).
+The CLI mirrors these fields as flags (`--top-k`, `--min-faithfulness`, `--high-intensity-threshold`, etc.).
 
 ---
 
@@ -264,7 +277,7 @@ Artifacts are stored under `.hypo_cache/` (configurable via `RuntimeConfig.cache
 ## Testing
 
 ```bash
-python -m pytest -q    # 77 stdlib-only tests always pass; 96 total when all optional deps installed
+python -m pytest -q    # 89 stdlib-only tests always pass; 108 total when all optional deps installed
 ```
 
 **Test modules:**
@@ -275,7 +288,7 @@ python -m pytest -q    # 77 stdlib-only tests always pass; 96 total when all opt
 - `test_pyvene.py` — `PyVeneInterventionRunner` hook-fallback path and effect-size correctness; entire module is skipped when torch is not installed (8 tests)
 - `test_diagnostics.py` — 33 tests covering all 11 probes in `diagnostics.py`, JSON serializability, CLI flag, and `HypoSpaceAPI.diagnostics()` (33 tests)
 - `test_canvas.py` — `SemanticCanvas` edge cases: empty input, single feature, sort order, edge values (7 tests)
-- `test_units.py` — Negative-path and boundary-value tests for preprocessor, hierarchy, semantic, faithfulness, kernel_library, extractor (20 tests)
+- `test_units.py` — Negative-path and boundary-value tests for preprocessor, hierarchy, semantic, faithfulness, kernel_library, extractor, input validation (32 tests)
 
 Tests use `tmp_path` fixtures for isolation. Never modify `tests/fixtures/mini_regression_set.json` without updating expected outputs — this is the regression baseline.
 
@@ -306,6 +319,10 @@ Completed post-MVP integrations:
 - **nnsight** — `NNSightExtractor` in `data/nnsight_extractor.py`; wired into `HypoSpaceAPI.decode_from_model()`
 - **pyvene** — `PyVeneInterventionRunner` in `data/pyvene_runner.py`; provides real zero-ablation interventions when torch is available; `MechanisticAnalyzer` remains as the CPU fallback stub
 - **diskcache** — optional `diskcache.Cache` backend in `data/extractor.py` with JSON fallback when unavailable
-- **CI/CD** — GitHub Actions configured in `.github/workflows/`
+- **CI/CD** — GitHub Actions configured in `.github/workflows/`; `test_nnsight.py` runs in the torch job
+- **Cache key correctness** — `ActivationExtractor._cache_key()` now scopes keys to `(model_name, layer, values)` to prevent cross-model collisions
+- **Live-model CLI** — `--layer-path`, `--inputs`, `--token-index` flags expose `decode_and_score_from_model()` from the command line
+- **Configurable semantic thresholds** — `DecoderConfig.high_intensity_threshold` / `medium_intensity_threshold` control intensity-band labeling; settable via CLI and Python API
+- **Input validation** — `decode()` validates non-empty model/layer, semver version, and `max_features` length; `KernelLibrary.load()` raises `ValueError` on corrupt JSON artifacts
 
 KPIs to maintain: time-to-first-insight, concept consistency across runs (cross-run match rate), faithfulness coverage (≥80% of top features have mechanistic checks), CPU viability.
