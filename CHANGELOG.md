@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.1.3] — 2026-04-27
+
+### Fixed
+- `data/utils.py:resolve_layer()` now raises `ValueError` with the failed segment and full path as context, instead of propagating a bare `AttributeError`/`IndexError`
+- `api.py:_run_real_interventions()` no longer accesses the private `NNSightExtractor._lm` attribute directly; uses the new `loaded_model` property instead
+- CLI threshold flags (`--min-faithfulness`, `--min-stability`, `--high-intensity-threshold`, `--medium-intensity-threshold`) now reject values outside `[0, 1]` with a clear argparse error
+- `core/decoder.py`: first-run `KeyError` on cross-run match rate is now surfaced as a `warnings.warn()` instead of being silently swallowed
+- `data/pyvene_runner.py:_layer_index()` now warns when no integer segment is found in the layer path and the index falls back to 0
+- `requirements.txt`: removed `streamlit` (it is optional per `pyproject.toml`); replaced with an install hint comment
+
+### Added
+- `NNSightExtractor.loaded_model` property — raises `RuntimeError` if called before `extract()`, replacing direct `_lm` access at call sites
+- 5 new unit tests in `test_units.py`: `resolve_layer()` valid attribute path, valid integer index, bad attribute (asserts `ValueError`), out-of-bounds index (asserts `ValueError`), and decoder first-run cross-run match rate equals `"0.000"`
+
+### Changed
+- `core/config.py`: removed unused `from typing import Dict` import
+- Test suite: 89 → 94 stdlib-only tests; 108 → 113 total with full optional stack
+
+---
+
 ## [0.1.2] — 2026-04-27
 
 ### Fixed
