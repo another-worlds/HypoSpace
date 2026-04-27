@@ -122,7 +122,7 @@ The current project is organized as follows:
 - `core/`
   - `config.py` — runtime/decoder/governance configuration models.
   - `decoder.py` — decode pipeline entrypoint.
-  - `hierarchy.py` — hierarchical kernel logic.
+  - `hierarchy.py` — top-k magnitude-based feature ranking; placeholder for future SAE backend dispatch.
   - `kernel_library.py` — kernel templates, save/load, and matching utilities.
 - `data/`
   - `extractor.py` — activation extraction and SHA256-keyed disk cache.

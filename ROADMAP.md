@@ -26,13 +26,13 @@ Build a lightweight end-to-end pipeline that turns PyTorch model activations int
 ## Stage 2 (Weeks 3–4): Hierarchical Kernels + Persistence ✅ Complete
 
 ### Deliverables
-- `core/hierarchy.py`: Matryoshka SAE wrapper (priority backend) with CPU fallback for compact dictionaries
+- `core/hierarchy.py`: `HierarchyEngine` with magnitude-based top-k feature ranking; `backend` field stored for future SAE dispatch but no real SAE implemented yet
 - `core/kernel_library.py`: `KernelTemplate`, semver versioning + training metadata, save/load/match/merge API
 - Initial cross-run concept matching
 
 ### Acceptance Criteria
 - A repeated run on the same model restores and matches key concepts.
-- CPU fallback works in limited mode (small dictionaries, batch=1).
+- Pipeline runs on CPU without GPU. Feature ranking is magnitude-based (SAE backend integration deferred to post-MVP).
 
 ---
 
@@ -91,6 +91,9 @@ Backlog items shipped after MVP:
 - Extended causal path tracing scenarios.
 - Library of reusable Persistent Kernels across model families.
 - Governance scorecard export to standardized reports.
+- Interactive graph/canvas visualization (edges currently rendered as a dataframe only; no spatial layout, hover, or drill-down).
+- Batch input workflows (no multi-example batch decode path in API or CLI).
+- Streamlit multi-model comparison and result export (single-model only; no cross-run UI or export to JSON/CSV/PDF).
 
 ---
 
