@@ -10,6 +10,13 @@ from data.utils import resolve_layer
 from interpretability.mechanistic import InterventionResult
 
 
+_ABLATION_METHODS: dict[str, str] = {
+    "hooks":        "hook-zero-ablation",
+    "pyvene_token": "pyvene-token-ablation",
+    # future: "pyvene_dim": "pyvene-dim-ablation"
+}
+
+
 def pyvene_available() -> bool:
     try:
         import pyvene  # noqa: F401
@@ -35,10 +42,27 @@ class PyVeneInterventionRunner:
     to raw PyTorch forward hooks, which achieve the same effect.
     """
 
-    def __init__(self, lm: Any, layer_path: str, device: str = "cpu") -> None:
+    def __init__(
+        self,
+        lm: Any,
+        layer_path: str,
+        device: str = "cpu",
+        ablation_mode: str = "hooks",
+    ) -> None:
+        if ablation_mode not in _ABLATION_METHODS:
+            raise ValueError(
+                f"Unknown ablation_mode {ablation_mode!r}. "
+                f"Valid values: {sorted(_ABLATION_METHODS)}"
+            )
         self.lm = lm
         self.layer_path = layer_path
         self.device = device
+        self.ablation_mode = ablation_mode
+
+    @property
+    def intervention_method(self) -> str:
+        """Label for the ablation method in use — recorded in GovernanceScorecard provenance."""
+        return _ABLATION_METHODS[self.ablation_mode]
 
     @classmethod
     def require(cls) -> None:
@@ -75,7 +99,7 @@ class PyVeneInterventionRunner:
         results: List[InterventionResult] = []
 
         for feature in features:
-            if pyvene_available():
+            if self.ablation_mode == "pyvene_token":
                 ablated_logits = self._ablate_with_pyvene(inputs, feature.source_index)
             else:
                 ablated_logits = self._ablate_with_hooks(inputs, feature.source_index)

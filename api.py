@@ -223,8 +223,9 @@ class HypoSpaceAPI:
                 lm=nnsight_ex.loaded_model,
                 layer_path=layer_path,
                 device=self.config.runtime.device,
+                ablation_mode="hooks",
             )
-            return runner.run_interventions(features, inputs, token_index), "pyvene-zero-ablation"
+            return runner.run_interventions(features, inputs, token_index), runner.intervention_method
         except ImportError:
             return self.mechanistic.run_interventions(features), "stub-50pct"
 

@@ -323,3 +323,19 @@ def test_magnitude_backend_extract_top_k_clipped() -> None:
 def test_magnitude_backend_extract_empty_returns_empty() -> None:
     from data.sae_backend import MagnitudeBackend
     assert MagnitudeBackend().extract([], "l", top_k=4) == []
+
+
+# ---------------------------------------------------------------------------
+# PyVeneInterventionRunner — ablation_mode (stdlib-safe, no torch needed)
+# ---------------------------------------------------------------------------
+
+def test_pyvene_runner_intervention_method_property() -> None:
+    from data.pyvene_runner import PyVeneInterventionRunner
+    assert PyVeneInterventionRunner(None, "x", ablation_mode="hooks").intervention_method == "hook-zero-ablation"
+    assert PyVeneInterventionRunner(None, "x", ablation_mode="pyvene_token").intervention_method == "pyvene-token-ablation"
+
+
+def test_pyvene_runner_unknown_ablation_mode_raises() -> None:
+    from data.pyvene_runner import PyVeneInterventionRunner
+    with pytest.raises(ValueError, match="ablation_mode"):
+        PyVeneInterventionRunner(None, "x", ablation_mode="bad_mode")
