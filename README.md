@@ -10,7 +10,7 @@ Modern model debugging often breaks into disconnected workflows: feature extract
 
 At a high level, HypoSpace:
 - extracts and normalizes activations,
-- decodes them into reusable kernel-like features,
+- decodes them into reusable kernel-like features (SAE-based concept features when `sae_path` is configured; magnitude top-k otherwise),
 - annotates features with semantic labels,
 - runs mechanistic intervention checks,
 - produces a governance scorecard for faithfulness and stability.
@@ -40,9 +40,10 @@ pip install nnsight pyvene diskcache
 | CLI decode + governance scorecard | ✅ | ✅ |
 | Streamlit UI | ✅ | ✅ |
 | Kernel library, versioning, caching | ✅ JSON cache | ✅ diskcache |
-| Mechanistic interventions | stub (synthetic 50%) | real zero-ablation |
+| Mechanistic interventions (Path A — raw activations) | stub (synthetic 50%) | stub (synthetic 50%) |
+| Mechanistic interventions (Path B — live model) | stub (synthetic 50%) | real zero-ablation |
 | Live HuggingFace model extraction | ❌ | ✅ |
-| Full test suite | 94 pass, 19 skipped | 113 pass, 0 skipped |
+| Full test suite | 105 pass, 33 skipped | 138 pass, 0 skipped |
 
 ### 2) Check subsystem health
 
@@ -94,7 +95,7 @@ streamlit run viz/streamlit_app.py
 
 MVP tabs:
 - Kernel Explorer
-- Semantic Canvas
+- Semantic Canvas (bar chart + edge table; interactive graph is post-MVP)
 - Mechanistic Probes + Governance
 
 ### 6) Run tests
@@ -146,7 +147,7 @@ The current project is organized as follows:
 1. `HypoSpaceAPI.decode(...)` extracts + normalizes activations.
 2. `RealityDecoder.decode(...)` generates top-k feature concepts and kernel artifacts.
 3. `SemanticInterpreter` attaches human-readable labels.
-4. `MechanisticAnalyzer` runs interventions on selected features.
+4. `MechanisticAnalyzer` runs interventions on selected features (**stub on Path A** — synthetic 50%; real zero-ablation via `PyVeneInterventionRunner` on Path B when torch is installed).
 5. `FaithfulnessChecker` computes governance metrics and threshold outcomes.
 
 This keeps the pipeline modular while preserving a single-call happy path via `decode_and_score(...)`.

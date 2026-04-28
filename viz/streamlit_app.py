@@ -111,12 +111,18 @@ def run() -> None:
         st.subheader("Mechanistic checks")
         st.dataframe(_intervention_rows(interventions), use_container_width=True)
         st.markdown("**Governance scorecard**")
+        if scorecard.intervention_method == "stub-50pct":
+            st.caption(
+                "⚠ Interventions are synthetic (effect_size = baseline × 0.5). "
+                "Use decode_and_score_from_model() with torch for real causal measurements."
+            )
         st.json(
             {
                 "faithfulness_score": round(scorecard.faithfulness_score, 4),
                 "stability_score": round(scorecard.stability_score, 4),
                 "risk_flag": scorecard.risk_flag,
                 "passes_thresholds": scorecard.passes_thresholds,
+                "intervention_method": scorecard.intervention_method,
             }
         )
 

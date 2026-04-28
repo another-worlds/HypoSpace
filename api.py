@@ -106,6 +106,7 @@ class HypoSpaceAPI:
         intervention_method: str = "unknown",
     ) -> GovernanceScorecard:
         if interventions is None:
+            # No real interventions available on Path A — always falls back to stub.
             interventions = self.mechanistic.run_interventions(result.features)
             intervention_method = "stub-50pct"
         return self.faithfulness.evaluate(interventions, intervention_method=intervention_method)
@@ -117,6 +118,12 @@ class HypoSpaceAPI:
         raw_activations: Iterable[float],
         version: str = "0.1.0",
     ) -> HypoSpaceResult:
+        """Decode raw activations and compute governance scorecard.
+
+        NOTE: governance scorecard always uses the MechanisticAnalyzer stub
+        (intervention_method="stub-50pct") regardless of whether torch is installed.
+        For real zero-ablation interventions use decode_and_score_from_model() instead.
+        """
         decode_result = self.decode(model_name=model_name, layer=layer, raw_activations=raw_activations, version=version)
         return HypoSpaceResult(decode=decode_result, scorecard=self.scorecard(decode_result))
 

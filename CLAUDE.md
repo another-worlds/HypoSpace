@@ -61,7 +61,7 @@ raw_activations
   → DecodeResult                         ← decode() stops here
 
   # decode_and_score() continues:
-  → MechanisticAnalyzer   (synthetic 50% stub) or PyVeneInterventionRunner (real zero-ablation, when torch available)
+  → MechanisticAnalyzer   (synthetic 50% stub — always used on Path A regardless of torch; see ISSUE-P01)
   → FaithfulnessChecker   (faithfulness + stability scores)
   → HypoSpaceResult
 ```
@@ -74,7 +74,10 @@ model_name + inputs + layer_path
   → RealityDecoder → …          (same as Path A from here)
   → DecodeResult                         ← decode_from_model() stops here
 
-  # decode_and_score_from_model() continues as in Path A
+  # decode_and_score_from_model() continues:
+  → PyVeneInterventionRunner (hooks, real zero-ablation when torch available; stub fallback otherwise)
+  → FaithfulnessChecker
+  → HypoSpaceResult
 ```
 
 ---
@@ -323,7 +326,7 @@ Tests use `tmp_path` fixtures for isolation. Never modify `tests/fixtures/mini_r
 
 Completed post-MVP integrations:
 - **nnsight** — `NNSightExtractor` in `data/nnsight_extractor.py`; wired into `HypoSpaceAPI.decode_from_model()`
-- **pyvene** — `PyVeneInterventionRunner` in `data/pyvene_runner.py`; provides real zero-ablation interventions when torch is available; `MechanisticAnalyzer` remains as the CPU fallback stub; hooks are the default ablation path (`ablation_mode="hooks"`); pyvene token-position path preserved as `ablation_mode="pyvene_token"` for future dimension-level pyvene work
+- **pyvene** — `PyVeneInterventionRunner` in `data/pyvene_runner.py`; provides real zero-ablation interventions when torch is available; `MechanisticAnalyzer` remains as the CPU fallback stub; hooks are the default ablation path (`ablation_mode="hooks"`); pyvene token-position path preserved as `ablation_mode="pyvene_token"` for future dimension-level pyvene work; **note**: real interventions are only wired into Path B (`decode_and_score_from_model()`); Path A (`decode_and_score()`) always uses the stub — see ISSUE-P01
 - **diskcache** — optional `diskcache.Cache` backend in `data/extractor.py` with JSON fallback when unavailable
 - **CI/CD** — GitHub Actions configured in `.github/workflows/`; `test_nnsight.py` runs in the torch job
 - **Cache key correctness** — `ActivationExtractor._cache_key()` now scopes keys to `(model_name, layer, values)` to prevent cross-model collisions

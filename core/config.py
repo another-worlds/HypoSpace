@@ -29,7 +29,7 @@ class DecoderConfig:
 
     backend: str = "matryoshka"
     top_k: int = 8
-    sae_path: str | None = None
+    sae_path: str | None = None  # None → magnitude top-k fallback (not SAE concept features)
     high_intensity_threshold: float = 0.8
     medium_intensity_threshold: float = 0.4
     runtime: RuntimeConfig = field(default_factory=RuntimeConfig)

@@ -149,3 +149,9 @@ Logged from the 2026-04-24 distributed-agent review. Issues fixed in the 2026-04
 |---|---|---|
 | ISSUE-L01 ✅ | `interpretability/semantic.py:SemanticInterpreter` | Class docstring says "template-first" but implementation uses hardcoded thresholds (0.8, 0.4); no template system exists |
 | ISSUE-L02 ✅ | `interpretability/mechanistic.py:run_interventions()` | Docstring does not state that `effect_size` is always `baseline * 0.5`; users may interpret stub governance scorecards as real causal measurements |
+
+### Path A — Structural Gaps
+
+| ID | File | Issue |
+|---|---|---|
+| ISSUE-P01 | `api.py:decode_and_score()` | Path A (raw-activations) governance scorecard always uses `MechanisticAnalyzer` stub regardless of torch availability — real zero-ablation interventions are only wired into `decode_and_score_from_model()` (Path B) |
