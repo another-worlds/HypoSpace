@@ -83,6 +83,7 @@ Backlog items shipped after MVP:
 | diskcache / CI-CD | ✅ Done | GitHub Actions added; cache layer updated |
 | Full dep stack documented | ✅ Done | torch + nnsight + pyvene + diskcache install path documented in README, QUICKSTART, CLAUDE.md, and requirements-dev.txt; two-level install (minimal vs full) with capability table |
 | SAE backend wiring | ✅ Done | `data/sae_backend.py` — `FeatureBackend` protocol, `MagnitudeBackend` (stdlib), `MatryoshkaBackend` (torch; matryoshka/topk/jumprelu); `DecoderConfig.sae_path` selects checkpoint; `None` → magnitude fallback; diagnostics schema `1.1.0` with `_probe_sae_backend` |
+| pyvene ablation dispatch | ✅ Done | `_ABLATION_METHODS` lookup table; `ablation_mode="hooks"` as correct default (hidden-dim zeroing via PyTorch forward hooks); `"pyvene_token"` preserved for future pyvene dimension-level API; `intervention_method` property propagates provenance to `GovernanceScorecard` |
 
 ---
 

@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.1.5] — 2026-04-28
+
+### Fixed
+- `data/pyvene_runner.py`: pyvene's `block_output` + `unit_locations` interprets
+  indices as **token-sequence positions**, not hidden-dimension coordinates;
+  `source_index=447` on a 5-token sequence caused an out-of-range error and a
+  spurious `UserWarning` on every real-model intervention. Default mode is now
+  `"hooks"` (raw PyTorch forward hooks), which zeros `[..., source_index]` across all
+  token positions without touching pyvene's token-position mapping.
+- `api.py`: `GovernanceScorecard.intervention_method` was recorded as
+  `"pyvene-zero-ablation"` even when the hooks path was actually used; now reads
+  `runner.intervention_method` for accurate provenance.
+
+### Added
+- `data/pyvene_runner.py`: `_ABLATION_METHODS` dispatch table maps mode strings to
+  provenance labels (`"hooks"` → `"hook-zero-ablation"`, `"pyvene_token"` →
+  `"pyvene-token-ablation"`); `ablation_mode` constructor parameter (default `"hooks"`,
+  validated against the table); `intervention_method` property exposes the label for
+  scorecard provenance
+- `api.py`: `_run_real_interventions()` passes `ablation_mode="hooks"` explicitly
+- 3 new tests in `test_pyvene.py`: hooks mode no warning on large source_index,
+  pyvene_token mode warns on large source_index, hook effect size is non-zero
+- 2 new unit tests in `test_units.py`: `intervention_method` property values,
+  unknown `ablation_mode` raises `ValueError` (stdlib-safe, no torch required)
+
+### Changed
+- Test suite: 103 → 105 stdlib-only tests; 133 → 138 total with full optional stack
+
+---
+
 ## [0.1.4] — 2026-04-27
 
 ### Added
