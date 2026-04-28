@@ -103,3 +103,17 @@ def test_fail_on_low_confidence_raises(tmp_path) -> None:
 
     with pytest.raises(GovernanceThresholdError):
         api.decode_and_score("demo", "layer_2", [0.2, 0.1, 0.05])
+
+
+def test_api_sae_path_none_falls_back_gracefully(tmp_path) -> None:
+    """DecoderConfig.sae_path=None causes silent magnitude fallback; pipeline still works."""
+    config = DecoderConfig(
+        backend="matryoshka",
+        sae_path=None,
+        top_k=2,
+        runtime=RuntimeConfig(cache_dir=str(tmp_path)),
+    )
+    api = HypoSpaceAPI(config=config)
+    result = api.decode_and_score("demo", "layer_0", [0.1, -0.9, 0.3])
+    assert len(result.decode.features) == 2
+    assert all(":feature:" in f.id for f in result.decode.features)

@@ -82,6 +82,8 @@ Backlog items shipped after MVP:
 | pyvene interventions | ✅ Done | `PyVeneInterventionRunner` in `data/pyvene_runner.py`; provides real zero-ablation when torch is available; `MechanisticAnalyzer` 50% stub remains as CPU fallback |
 | diskcache / CI-CD | ✅ Done | GitHub Actions added; cache layer updated |
 | Full dep stack documented | ✅ Done | torch + nnsight + pyvene + diskcache install path documented in README, QUICKSTART, CLAUDE.md, and requirements-dev.txt; two-level install (minimal vs full) with capability table |
+| SAE backend wiring | ✅ Done | `data/sae_backend.py` — `FeatureBackend` protocol, `MagnitudeBackend` (stdlib), `MatryoshkaBackend` (torch; matryoshka/topk/jumprelu); `DecoderConfig.sae_path` selects checkpoint; `None` → magnitude fallback; diagnostics schema `1.1.0` with `_probe_sae_backend` |
+| pyvene ablation dispatch | ✅ Done | `_ABLATION_METHODS` lookup table; `ablation_mode="hooks"` as correct default (hidden-dim zeroing via PyTorch forward hooks); `"pyvene_token"` preserved for future pyvene dimension-level API; `intervention_method` property propagates provenance to `GovernanceScorecard` |
 
 ---
 
@@ -147,3 +149,9 @@ Logged from the 2026-04-24 distributed-agent review. Issues fixed in the 2026-04
 |---|---|---|
 | ISSUE-L01 ✅ | `interpretability/semantic.py:SemanticInterpreter` | Class docstring says "template-first" but implementation uses hardcoded thresholds (0.8, 0.4); no template system exists |
 | ISSUE-L02 ✅ | `interpretability/mechanistic.py:run_interventions()` | Docstring does not state that `effect_size` is always `baseline * 0.5`; users may interpret stub governance scorecards as real causal measurements |
+
+### Path A — Structural Gaps
+
+| ID | File | Issue |
+|---|---|---|
+| ISSUE-P01 | `api.py:decode_and_score()` | Path A (raw-activations) governance scorecard always uses `MechanisticAnalyzer` stub regardless of torch availability — real zero-ablation interventions are only wired into `decode_and_score_from_model()` (Path B) |

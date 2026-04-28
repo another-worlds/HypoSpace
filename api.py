@@ -19,6 +19,7 @@ from interpretability.semantic import SemanticInterpreter
 
 if TYPE_CHECKING:
     from data.nnsight_extractor import NNSightExtractor
+    from data.sae_backend import MatryoshkaBackend
     from diagnostics import DiagnosticsReport
 
 
@@ -35,7 +36,7 @@ class HypoSpaceAPI:
         self.config = config or DecoderConfig()
         self.extractor = ActivationExtractor(cache_dir=self.config.runtime.cache_dir)
         self.preprocessor = ActivationPreprocessor()
-        self.decoder = RealityDecoder(config=self.config)
+        self.decoder = RealityDecoder(config=self.config, feature_backend=self._build_sae_backend())
         self.semantic = SemanticInterpreter(
             high=self.config.high_intensity_threshold,
             medium=self.config.medium_intensity_threshold,
@@ -43,6 +44,18 @@ class HypoSpaceAPI:
         self.mechanistic = MechanisticAnalyzer()
         self.faithfulness = FaithfulnessChecker(config=self.config.governance)
         self._nnsight: NNSightExtractor | None = None
+
+    def _build_sae_backend(self):
+        """Construct SAE backend from config; return None on any failure (magnitude fallback)."""
+        try:
+            from data.sae_backend import build_backend
+            return build_backend(
+                backend=self.config.backend,
+                sae_path=self.config.sae_path,
+                device=self.config.runtime.device,
+            )
+        except ImportError:
+            return None
 
     # ------------------------------------------------------------------
     # Path A — raw activations
@@ -93,6 +106,7 @@ class HypoSpaceAPI:
         intervention_method: str = "unknown",
     ) -> GovernanceScorecard:
         if interventions is None:
+            # No real interventions available on Path A — always falls back to stub.
             interventions = self.mechanistic.run_interventions(result.features)
             intervention_method = "stub-50pct"
         return self.faithfulness.evaluate(interventions, intervention_method=intervention_method)
@@ -104,6 +118,12 @@ class HypoSpaceAPI:
         raw_activations: Iterable[float],
         version: str = "0.1.0",
     ) -> HypoSpaceResult:
+        """Decode raw activations and compute governance scorecard.
+
+        NOTE: governance scorecard always uses the MechanisticAnalyzer stub
+        (intervention_method="stub-50pct") regardless of whether torch is installed.
+        For real zero-ablation interventions use decode_and_score_from_model() instead.
+        """
         decode_result = self.decode(model_name=model_name, layer=layer, raw_activations=raw_activations, version=version)
         return HypoSpaceResult(decode=decode_result, scorecard=self.scorecard(decode_result))
 
@@ -210,8 +230,9 @@ class HypoSpaceAPI:
                 lm=nnsight_ex.loaded_model,
                 layer_path=layer_path,
                 device=self.config.runtime.device,
+                ablation_mode="hooks",
             )
-            return runner.run_interventions(features, inputs, token_index), "pyvene-zero-ablation"
+            return runner.run_interventions(features, inputs, token_index), runner.intervention_method
         except ImportError:
             return self.mechanistic.run_interventions(features), "stub-50pct"
 

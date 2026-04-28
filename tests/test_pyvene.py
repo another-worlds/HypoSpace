@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import math
 
 import pytest
 
@@ -33,13 +34,18 @@ def _make_features(n: int = 3):
     ]
 
 
-def _make_runner(tmp_path, model_name: str = "gpt2", layer_path: str = "transformer.h.0"):
+def _make_runner(
+    tmp_path,
+    model_name: str = "gpt2",
+    layer_path: str = "transformer.h.0",
+    ablation_mode: str = "hooks",
+):
     from data.nnsight_extractor import NNSightExtractor
     from data.pyvene_runner import PyVeneInterventionRunner
 
     ex = NNSightExtractor(model_name, device="cpu", cache_dir=str(tmp_path))
     ex._load_model()
-    return PyVeneInterventionRunner(lm=ex._lm, layer_path=layer_path, device="cpu")
+    return PyVeneInterventionRunner(lm=ex._lm, layer_path=layer_path, device="cpu", ablation_mode=ablation_mode)
 
 
 # ---------------------------------------------------------------------------
@@ -96,13 +102,12 @@ def test_ablated_field_is_zero(tmp_path) -> None:
 
 
 def test_hook_fallback_when_pyvene_absent(tmp_path, monkeypatch) -> None:
-    """Hook path is used when pyvene is unavailable; results still have real effect sizes."""
+    """pyvene_token mode falls back to hooks when pyvene is unavailable; results are valid."""
     import data.pyvene_runner as mod
     monkeypatch.setattr(mod, "pyvene_available", lambda: False)
 
-    runner = _make_runner(tmp_path)
-    features = _make_features(3)
-    results = runner.run_interventions(features, "The quick brown fox")
+    runner = _make_runner(tmp_path, ablation_mode="pyvene_token")
+    results = runner.run_interventions(_make_features(3), "The quick brown fox")
     assert len(results) == 3
     for r in results:
         assert r.effect_size >= 0.0
@@ -126,7 +131,7 @@ def test_results_differ_from_50pct_stub(tmp_path) -> None:
 
 @pytest.mark.skipif(not _PYVENE_AVAILABLE, reason="pyvene required")
 def test_pyvene_path_is_exercised(tmp_path) -> None:
-    """pyvene code path is entered when pyvene is installed."""
+    """pyvene code path is entered when ablation_mode='pyvene_token' and pyvene is installed."""
     import data.pyvene_runner as mod
 
     calls: list[str] = []
@@ -138,9 +143,49 @@ def test_pyvene_path_is_exercised(tmp_path) -> None:
 
     mod.PyVeneInterventionRunner._ablate_with_pyvene = patched
     try:
-        runner = _make_runner(tmp_path)
+        runner = _make_runner(tmp_path, ablation_mode="pyvene_token")
         runner.run_interventions(_make_features(2), "Hello")
     finally:
         mod.PyVeneInterventionRunner._ablate_with_pyvene = original
 
     assert "pyvene" in calls
+
+
+def test_hooks_mode_no_pyvene_warning_on_large_source_index(tmp_path) -> None:
+    """ablation_mode='hooks' does not emit pyvene warnings even when source_index >> seq_len."""
+    import warnings
+    from core.hierarchy import Feature
+
+    runner = _make_runner(tmp_path, ablation_mode="hooks")
+    large_idx_features = [Feature(id="f:0", layer="l", score=0.5, source_index=447)]
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        results = runner.run_interventions(large_idx_features, "hi")
+    pyvene_warns = [w for w in caught if "pyvene" in str(w.message).lower()]
+    assert pyvene_warns == [], f"Unexpected pyvene warning: {pyvene_warns}"
+    assert len(results) == 1
+    assert math.isfinite(results[0].effect_size)
+
+
+@pytest.mark.skipif(not _PYVENE_AVAILABLE, reason="pyvene required")
+def test_pyvene_token_mode_warns_on_large_source_index(tmp_path) -> None:
+    """ablation_mode='pyvene_token' warns when source_index >= seq_len."""
+    import warnings
+    from core.hierarchy import Feature
+
+    runner = _make_runner(tmp_path, ablation_mode="pyvene_token")
+    large_idx_features = [Feature(id="f:0", layer="l", score=0.5, source_index=447)]
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        results = runner.run_interventions(large_idx_features, "hi")
+    pyvene_warns = [w for w in caught if "pyvene" in str(w.message).lower()]
+    assert len(pyvene_warns) >= 1
+    assert len(results) == 1
+
+
+def test_hook_effect_size_is_nonzero(tmp_path) -> None:
+    """Hook-based ablation measurably changes logits (non-trivial effect size)."""
+    runner = _make_runner(tmp_path, ablation_mode="hooks")
+    features = _make_features(1)  # source_index=0, well within hidden dim
+    results = runner.run_interventions(features, "The quick brown fox")
+    assert results[0].effect_size > 0.0
