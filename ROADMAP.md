@@ -89,13 +89,17 @@ Backlog items shipped after MVP:
 
 ## Post-MVP Backlog
 
+Shipped in 0.1.6:
+- ✅ Batch input workflows — `decode_batch()`, `decode_and_score_batch()` in API; `--input-file`/`--output-file` in CLI
+- ✅ Governance scorecard export — `GovernanceScorecard.to_dict()`, `HypoSpaceResult.to_dict()`; Streamlit CSV/JSON download buttons
+- ✅ Canvas 2D layout — `to_layout()` with rank-normalized x / score-normalized y; scatter chart in Streamlit
+
+Remaining:
 - Full USAE alignment for a cross-model universal concept space.
 - Extended causal path tracing scenarios.
 - Library of reusable Persistent Kernels across model families.
-- Governance scorecard export to standardized reports.
-- Interactive graph/canvas visualization (edges currently rendered as a dataframe only; no spatial layout, hover, or drill-down).
-- Batch input workflows (no multi-example batch decode path in API or CLI).
-- Streamlit multi-model comparison and result export (single-model only; no cross-run UI or export to JSON/CSV/PDF).
+- Streamlit multi-model comparison and cross-run export (single-model only; no cross-run UI).
+- Interactive graph/canvas visualization (spatial layout, hover, drill-down — requires a layout algorithm).
 
 ---
 
@@ -154,4 +158,4 @@ Logged from the 2026-04-24 distributed-agent review. Issues fixed in the 2026-04
 
 | ID | File | Issue |
 |---|---|---|
-| ISSUE-P01 | `api.py:decode_and_score()` | Path A (raw-activations) governance scorecard always uses `MechanisticAnalyzer` stub regardless of torch availability — real zero-ablation interventions are only wired into `decode_and_score_from_model()` (Path B) |
+| ISSUE-P01 ✅ | `api.py:decode_and_score()` | Path A now accepts optional `layer_path`, `inputs`, `token_index`; routes to real zero-ablation when provided, falls back to stub otherwise |

@@ -2,6 +2,9 @@ from __future__ import annotations
 
 """Streamlit UI: three-tab interactive explorer for kernels, canvas, and governance."""
 
+import csv
+import io
+import json
 from typing import List
 
 from api import HypoSpaceAPI
@@ -38,6 +41,16 @@ def _intervention_rows(rows: List[InterventionResult]) -> List[dict[str, float |
         }
         for row in rows
     ]
+
+
+def _to_csv(rows: List[dict]) -> str:
+    if not rows:
+        return ""
+    buf = io.StringIO()
+    w = csv.DictWriter(buf, fieldnames=list(rows[0].keys()))
+    w.writeheader()
+    w.writerows(rows)
+    return buf.getvalue()
 
 
 def run() -> None:
@@ -86,16 +99,29 @@ def run() -> None:
     with kernel_tab:
         st.subheader("Decoded kernel features")
         st.caption(f"Kernel artifact: {decode_result.kernel_path}")
-        st.dataframe(_feature_rows(decode_result.features), use_container_width=True)
+        feature_rows = _feature_rows(decode_result.features)
+        st.dataframe(feature_rows, use_container_width=True)
+        st.download_button(
+            label="Download features CSV",
+            data=_to_csv(feature_rows),
+            file_name="features.csv",
+            mime="text/csv",
+        )
 
     with semantic_tab:
         st.subheader("Concept graph preview")
         canvas = SemanticCanvas()
-        points = canvas.to_points(decode_result.features)
+        layout = canvas.to_layout(decode_result.features)
         edges = canvas.to_edges(decode_result.features)
 
-        if points:
-            st.bar_chart({name: score for name, score in points})
+        if layout:
+            st.scatter_chart(layout, x="x", y="y", color="score", size="score")
+            st.download_button(
+                label="Download canvas CSV",
+                data=_to_csv(layout),
+                file_name="canvas.csv",
+                mime="text/csv",
+            )
             st.markdown("**Nearest-neighbor links**")
             st.dataframe(
                 [
@@ -109,21 +135,27 @@ def run() -> None:
 
     with governance_tab:
         st.subheader("Mechanistic checks")
-        st.dataframe(_intervention_rows(interventions), use_container_width=True)
+        intervention_rows = _intervention_rows(interventions)
+        st.dataframe(intervention_rows, use_container_width=True)
         st.markdown("**Governance scorecard**")
         if scorecard.intervention_method == "stub-50pct":
             st.caption(
                 "⚠ Interventions are synthetic (effect_size = baseline × 0.5). "
                 "Use decode_and_score_from_model() with torch for real causal measurements."
             )
-        st.json(
-            {
-                "faithfulness_score": round(scorecard.faithfulness_score, 4),
-                "stability_score": round(scorecard.stability_score, 4),
-                "risk_flag": scorecard.risk_flag,
-                "passes_thresholds": scorecard.passes_thresholds,
-                "intervention_method": scorecard.intervention_method,
-            }
+        scorecard_dict = {
+            "faithfulness_score": round(scorecard.faithfulness_score, 4),
+            "stability_score": round(scorecard.stability_score, 4),
+            "risk_flag": scorecard.risk_flag,
+            "passes_thresholds": scorecard.passes_thresholds,
+            "intervention_method": scorecard.intervention_method,
+        }
+        st.json(scorecard_dict)
+        st.download_button(
+            label="Download scorecard JSON",
+            data=json.dumps(scorecard_dict, indent=2),
+            file_name="scorecard.json",
+            mime="application/json",
         )
 
 

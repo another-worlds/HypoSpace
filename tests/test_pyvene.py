@@ -189,3 +189,21 @@ def test_hook_effect_size_is_nonzero(tmp_path) -> None:
     features = _make_features(1)  # source_index=0, well within hidden dim
     results = runner.run_interventions(features, "The quick brown fox")
     assert results[0].effect_size > 0.0
+
+
+def test_path_a_uses_real_interventions_when_layer_path_provided(tmp_path) -> None:
+    """decode_and_score() with layer_path+inputs uses real zero-ablation (not stub)."""
+    from api import HypoSpaceAPI
+    from core.config import DecoderConfig, RuntimeConfig
+
+    api = HypoSpaceAPI(config=DecoderConfig(runtime=RuntimeConfig(cache_dir=str(tmp_path), device="cpu")))
+    run = api.decode_and_score(
+        "gpt2",
+        "layer_0",
+        [0.1, 0.4, -0.2, 0.8],
+        layer_path="transformer.h.0",
+        inputs="Hello world",
+        token_index=-1,
+    )
+    assert run.scorecard.intervention_method != "stub-50pct"
+    assert run.scorecard.intervention_method == "hook-zero-ablation"

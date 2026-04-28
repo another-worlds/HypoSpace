@@ -339,3 +339,124 @@ def test_pyvene_runner_unknown_ablation_mode_raises() -> None:
     from data.pyvene_runner import PyVeneInterventionRunner
     with pytest.raises(ValueError, match="ablation_mode"):
         PyVeneInterventionRunner(None, "x", ablation_mode="bad_mode")
+
+
+# ---------------------------------------------------------------------------
+# ISSUE-P01 — decode_and_score() stub fallback (stdlib-safe, no torch needed)
+# ---------------------------------------------------------------------------
+
+def test_decode_and_score_no_layer_path_uses_stub(tmp_path) -> None:
+    from api import HypoSpaceAPI
+    from core.config import DecoderConfig, RuntimeConfig
+    api = HypoSpaceAPI(config=DecoderConfig(runtime=RuntimeConfig(cache_dir=str(tmp_path))))
+    run = api.decode_and_score("demo-model", "layer_0", [0.1, 0.4, -0.2, 0.8])
+    assert run.scorecard.intervention_method == "stub-50pct"
+
+
+def test_decode_and_score_explicit_none_layer_path_uses_stub(tmp_path) -> None:
+    from api import HypoSpaceAPI
+    from core.config import DecoderConfig, RuntimeConfig
+    api = HypoSpaceAPI(config=DecoderConfig(runtime=RuntimeConfig(cache_dir=str(tmp_path))))
+    run = api.decode_and_score("demo-model", "layer_0", [0.1, 0.4], layer_path=None, inputs=None)
+    assert run.scorecard.intervention_method == "stub-50pct"
+
+
+def test_decode_and_score_layer_path_without_inputs_uses_stub(tmp_path) -> None:
+    from api import HypoSpaceAPI
+    from core.config import DecoderConfig, RuntimeConfig
+    api = HypoSpaceAPI(config=DecoderConfig(runtime=RuntimeConfig(cache_dir=str(tmp_path))))
+    run = api.decode_and_score("demo-model", "layer_0", [0.1, 0.4], layer_path="transformer.h.0", inputs=None)
+    assert run.scorecard.intervention_method == "stub-50pct"
+
+
+# ---------------------------------------------------------------------------
+# Batch decode — decode_batch / decode_and_score_batch
+# ---------------------------------------------------------------------------
+
+def test_decode_batch_returns_correct_length(tmp_path) -> None:
+    from api import HypoSpaceAPI
+    from core.config import DecoderConfig, RuntimeConfig
+    from core.decoder import DecodeResult
+    api = HypoSpaceAPI(config=DecoderConfig(runtime=RuntimeConfig(cache_dir=str(tmp_path))))
+    matrix = [[0.1, 0.5], [0.9, 0.2], [0.3, 0.7]]
+    results = api.decode_batch("demo-model", "layer_0", matrix)
+    assert len(results) == 3
+    assert all(isinstance(r, DecodeResult) for r in results)
+
+
+def test_decode_and_score_batch_returns_correct_length(tmp_path) -> None:
+    from api import HypoSpaceAPI, HypoSpaceResult
+    from core.config import DecoderConfig, RuntimeConfig
+    api = HypoSpaceAPI(config=DecoderConfig(runtime=RuntimeConfig(cache_dir=str(tmp_path))))
+    matrix = [[0.1, 0.5], [0.9, 0.2]]
+    results = api.decode_and_score_batch("demo-model", "layer_0", matrix)
+    assert len(results) == 2
+    assert all(isinstance(r, HypoSpaceResult) for r in results)
+
+
+def test_decode_batch_empty_matrix_returns_empty(tmp_path) -> None:
+    from api import HypoSpaceAPI
+    from core.config import DecoderConfig, RuntimeConfig
+    api = HypoSpaceAPI(config=DecoderConfig(runtime=RuntimeConfig(cache_dir=str(tmp_path))))
+    assert api.decode_batch("demo-model", "layer_0", []) == []
+
+
+# ---------------------------------------------------------------------------
+# Export — GovernanceScorecard.to_dict() / HypoSpaceResult.to_dict()
+# ---------------------------------------------------------------------------
+
+def test_governance_scorecard_to_dict_expected_keys() -> None:
+    from interpretability.faithfulness import GovernanceScorecard
+    sc = GovernanceScorecard(
+        faithfulness_score=0.75,
+        stability_score=0.80,
+        risk_flag="ok",
+        passes_thresholds=True,
+        intervention_method="stub-50pct",
+    )
+    d = sc.to_dict()
+    assert set(d.keys()) == {"faithfulness_score", "stability_score", "risk_flag", "passes_thresholds", "intervention_method"}
+    assert isinstance(d["faithfulness_score"], float)
+    assert isinstance(d["passes_thresholds"], bool)
+
+
+def test_hypospace_result_to_dict_json_round_trip(tmp_path) -> None:
+    import json
+    from api import HypoSpaceAPI
+    from core.config import DecoderConfig, RuntimeConfig
+    api = HypoSpaceAPI(config=DecoderConfig(runtime=RuntimeConfig(cache_dir=str(tmp_path))))
+    run = api.decode_and_score("demo-model", "layer_0", [0.1, 0.4, -0.2, 0.8])
+    d = run.to_dict()
+    serialized = json.dumps(d)
+    loaded = json.loads(serialized)
+    assert isinstance(loaded["scorecard"]["risk_flag"], str)
+    assert "features" in loaded
+
+
+# ---------------------------------------------------------------------------
+# Streamlit helpers — _parse_activations, _feature_rows
+# ---------------------------------------------------------------------------
+
+def test_parse_activations_valid_csv() -> None:
+    from viz.streamlit_app import _parse_activations
+    assert _parse_activations("0.1, 0.4, -0.2") == [0.1, 0.4, -0.2]
+
+
+def test_parse_activations_empty_string_returns_empty() -> None:
+    from viz.streamlit_app import _parse_activations
+    assert _parse_activations("") == []
+
+
+def test_parse_activations_non_numeric_raises() -> None:
+    from viz.streamlit_app import _parse_activations
+    with pytest.raises(ValueError):
+        _parse_activations("0.1,abc")
+
+
+def test_feature_rows_expected_keys() -> None:
+    from core.hierarchy import Feature
+    from viz.streamlit_app import _feature_rows
+    feat = Feature(id="l:feature:0", layer="l", score=0.5, source_index=0, label="hi")
+    rows = _feature_rows([feat])
+    assert len(rows) == 1
+    assert set(rows[0].keys()) == {"id", "layer", "source_index", "score", "label"}

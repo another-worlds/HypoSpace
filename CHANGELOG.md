@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.1.6] — 2026-04-28
+
+### Fixed
+- **ISSUE-P01** (`api.py`, `data/nnsight_extractor.py`): `decode_and_score()` (Path A) always
+  used the `MechanisticAnalyzer` 50% stub even when torch + nnsight were available. Added
+  optional keyword parameters `layer_path`, `inputs`, `token_index` to `decode_and_score()`; when
+  both `layer_path` and `inputs` are provided, real zero-ablation interventions are used via
+  `_run_real_interventions()` (same path as Path B). Falls back to stub when parameters are absent
+  or torch/nnsight are not installed. Fully backward-compatible.
+- `data/nnsight_extractor.py`: added `ensure_loaded()` public method so `_run_real_interventions()`
+  can load the model on demand without requiring a prior `extract()` call.
+
+### Added
+- **Batch decode** (`api.py`): `decode_batch()` and `decode_and_score_batch()` — decode multiple
+  activation vectors for the same model and layer in a single call.
+- **Batch CLI** (`main.py`): `--input-file <path>` accepts a CSV file (one activation vector per
+  row, header auto-detected) and writes NDJSON output; `--output-file <path>` redirects output
+  (single or batch) to a file instead of stdout.
+- **Structured export** (`interpretability/faithfulness.py`, `api.py`): `GovernanceScorecard.to_dict()`
+  and `HypoSpaceResult.to_dict()` return clean JSON-serializable dicts for programmatic use.
+- **Streamlit download buttons** (`viz/streamlit_app.py`): CSV download for feature table and canvas
+  layout; JSON download for governance scorecard — in Kernel Explorer, Semantic Canvas, and
+  Mechanistic Probes tabs respectively.
+- **Canvas 2D layout** (`viz/canvas.py`): `SemanticCanvas.to_layout()` returns
+  `[{id, score, x, y, label}, ...]` with rank-normalized x and score-normalized y coordinates;
+  Semantic Canvas tab now renders a scatter chart instead of a bar chart.
+- **Tests**: 17 new stdlib-safe tests (12 in `test_units.py`, 5 in `test_canvas.py`); 1 new
+  torch-gated test in `test_pyvene.py` validating Path A real-intervention routing.
+
+### Changed
+- Test suite: 105 → 122 stdlib-only tests; +1 torch-gated test in `test_pyvene.py`
+
+---
+
 ## [0.1.5] — 2026-04-28
 
 ### Fixed
