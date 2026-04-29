@@ -92,8 +92,12 @@ class NNSightExtractor:
     def loaded_model(self) -> Any:
         """Return the loaded nnsight LanguageModel, raising if not yet loaded."""
         if self._lm is None:
-            raise RuntimeError("Model not loaded — call extract() first")
+            raise RuntimeError("Model not loaded — call extract() or ensure_loaded() first")
         return self._lm
+
+    def ensure_loaded(self) -> None:
+        """Load the model if not already loaded; no-op if already loaded."""
+        self._load_model()
 
     def _load_model(self) -> Any:
         self.require()

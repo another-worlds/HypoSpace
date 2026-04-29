@@ -28,6 +28,17 @@ class HypoSpaceResult:
     decode: DecodeResult
     scorecard: GovernanceScorecard
 
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "model_name": self.decode.model_name,
+            "layer": self.decode.layer,
+            "features": [
+                {"id": f.id, "score": f.score, "label": f.label}
+                for f in self.decode.features
+            ],
+            "scorecard": self.scorecard.to_dict(),
+        }
+
 
 class HypoSpaceAPI:
     """Public API façade for one-call model introspection workflows."""
@@ -117,15 +128,52 @@ class HypoSpaceAPI:
         layer: str,
         raw_activations: Iterable[float],
         version: str = "0.1.0",
+        *,
+        layer_path: str | None = None,
+        inputs: Union[str, Iterable[int]] | None = None,
+        token_index: int = -1,
     ) -> HypoSpaceResult:
         """Decode raw activations and compute governance scorecard.
 
-        NOTE: governance scorecard always uses the MechanisticAnalyzer stub
-        (intervention_method="stub-50pct") regardless of whether torch is installed.
-        For real zero-ablation interventions use decode_and_score_from_model() instead.
+        When layer_path and inputs are both provided and torch is available,
+        real zero-ablation interventions are used (same as Path B). Otherwise
+        falls back to the MechanisticAnalyzer stub (intervention_method="stub-50pct").
+        For unconditional real interventions use decode_and_score_from_model().
         """
         decode_result = self.decode(model_name=model_name, layer=layer, raw_activations=raw_activations, version=version)
+        if layer_path is not None and inputs is not None:
+            interventions, method = self._run_real_interventions(
+                features=decode_result.features,
+                model_name=model_name,
+                layer_path=layer_path,
+                inputs=inputs,
+                token_index=token_index,
+            )
+            return HypoSpaceResult(
+                decode=decode_result,
+                scorecard=self.scorecard(decode_result, interventions=interventions, intervention_method=method),
+            )
         return HypoSpaceResult(decode=decode_result, scorecard=self.scorecard(decode_result))
+
+    def decode_batch(
+        self,
+        model_name: str,
+        layer: str,
+        activation_matrix: Iterable[Iterable[float]],
+        version: str = "0.1.0",
+    ) -> list[DecodeResult]:
+        """Decode multiple activation vectors for the same model and layer."""
+        return [self.decode(model_name, layer, row, version) for row in activation_matrix]
+
+    def decode_and_score_batch(
+        self,
+        model_name: str,
+        layer: str,
+        activation_matrix: Iterable[Iterable[float]],
+        version: str = "0.1.0",
+    ) -> list[HypoSpaceResult]:
+        """Decode and score multiple activation vectors for the same model and layer."""
+        return [self.decode_and_score(model_name, layer, row, version) for row in activation_matrix]
 
     # ------------------------------------------------------------------
     # Path B — live model extraction via nnsight
@@ -226,6 +274,7 @@ class HypoSpaceAPI:
             from data.pyvene_runner import PyVeneInterventionRunner
             import torch  # noqa: F401
             nnsight_ex = self._nnsight_extractor(model_name)
+            nnsight_ex.ensure_loaded()
             runner = PyVeneInterventionRunner(
                 lm=nnsight_ex.loaded_model,
                 layer_path=layer_path,

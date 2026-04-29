@@ -21,6 +21,15 @@ class GovernanceScorecard:
     passes_thresholds: bool
     intervention_method: str = "unknown"
 
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "faithfulness_score": self.faithfulness_score,
+            "stability_score": self.stability_score,
+            "risk_flag": self.risk_flag,
+            "passes_thresholds": self.passes_thresholds,
+            "intervention_method": self.intervention_method,
+        }
+
 
 class FaithfulnessChecker:
     """Compute lightweight governance metrics for MVP."""

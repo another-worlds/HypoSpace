@@ -3,7 +3,9 @@ from __future__ import annotations
 """CLI entrypoint — parses flags and delegates to HypoSpaceAPI or run_diagnostics()."""
 
 import argparse
+import csv
 import json
+from pathlib import Path
 
 from api import HypoSpaceAPI
 from core.config import DecoderConfig, GovernanceConfig, RuntimeConfig
@@ -35,7 +37,49 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--layer-path", default=None, help="Dot-notation path into model for live extraction (e.g. transformer.h.0); if set, --inputs is required and --activations is ignored")
     parser.add_argument("--inputs", default=None, help="Text input for live model extraction (used with --layer-path)")
     parser.add_argument("--token-index", type=int, default=-1, help="Token position to extract (-1 = last token)")
+    # Batch flags
+    parser.add_argument("--input-file", default=None, help="CSV file with one activation vector per row; when set, --activations is ignored and output is NDJSON")
+    parser.add_argument("--output-file", default=None, help="Write output to this file instead of stdout")
     return parser
+
+
+def _read_activation_csv(path: Path) -> list[list[float]]:
+    """Parse a CSV file where each row is a comma-separated activation vector.
+
+    A header row (where the first cell is not parseable as float) is silently
+    skipped. Raises SystemExit(1) on missing file or non-numeric cell in data rows.
+    """
+    if not path.exists():
+        print(json.dumps({"error": f"Input file not found: {path}", "type": "FileNotFoundError"}, ensure_ascii=False))
+        raise SystemExit(1)
+    rows: list[list[float]] = []
+    with path.open(newline="", encoding="utf-8") as fh:
+        reader = csv.reader(fh)
+        for line_no, raw_row in enumerate(reader, start=1):
+            if not raw_row:
+                continue
+            first_cell = raw_row[0].strip()
+            if line_no == 1 and first_cell:
+                try:
+                    float(first_cell)
+                except ValueError:
+                    continue  # header row — skip
+            try:
+                parsed = [float(cell.strip()) for cell in raw_row if cell.strip()]
+            except ValueError as exc:
+                print(json.dumps({"error": f"Non-numeric value on line {line_no}: {exc}", "type": "ValueError"}, ensure_ascii=False))
+                raise SystemExit(1) from exc
+            if parsed:
+                rows.append(parsed)
+    return rows
+
+
+def _write_output(text: str, output_file: str | None) -> None:
+    if output_file is None:
+        print(text, end="" if text.endswith("\n") else "\n")
+    else:
+        content = text if text.endswith("\n") else text + "\n"
+        Path(output_file).write_text(content, encoding="utf-8")
 
 
 def main() -> None:
@@ -62,6 +106,28 @@ def main() -> None:
     )
     api = HypoSpaceAPI(config=config)
 
+    # ------------------------------------------------------------------
+    # Batch mode: --input-file overrides --activations and outputs NDJSON
+    # ------------------------------------------------------------------
+    if args.input_file is not None:
+        matrix = _read_activation_csv(Path(args.input_file))
+        try:
+            runs = api.decode_and_score_batch(
+                model_name=args.model,
+                layer=args.layer,
+                activation_matrix=matrix,
+                version=args.version,
+            )
+        except GovernanceThresholdError as exc:
+            print(json.dumps({"error": str(exc), "type": "GovernanceThresholdError"}, ensure_ascii=False))
+            raise SystemExit(2) from exc
+        lines = [json.dumps(r.to_dict(), ensure_ascii=False) for r in runs]
+        _write_output("\n".join(lines) + "\n", args.output_file)
+        return
+
+    # ------------------------------------------------------------------
+    # Single-decode mode
+    # ------------------------------------------------------------------
     try:
         if args.layer_path is not None:
             if args.inputs is None:
@@ -111,7 +177,8 @@ def main() -> None:
             "passes_thresholds": run.scorecard.passes_thresholds,
         },
     }
-    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    output = json.dumps(payload, ensure_ascii=False, indent=2)
+    _write_output(output, args.output_file)
 
 
 if __name__ == "__main__":

@@ -46,3 +46,41 @@ def test_edges_connect_adjacent_sorted_features() -> None:
     assert len(edges) == 2
     assert edges[0] == ("f0", "f1", 0.7)
     assert edges[1] == ("f1", "f2", 0.5)
+
+
+# ---------------------------------------------------------------------------
+# SemanticCanvas.to_layout()
+# ---------------------------------------------------------------------------
+
+def test_to_layout_empty_returns_empty() -> None:
+    assert SemanticCanvas().to_layout([]) == []
+
+
+def test_to_layout_single_feature_returns_half_coords() -> None:
+    layout = SemanticCanvas().to_layout([_feat(0, 0.9)])
+    assert len(layout) == 1
+    assert layout[0]["x"] == 0.5
+    assert layout[0]["y"] == 0.5
+
+
+def test_to_layout_xy_in_unit_interval() -> None:
+    features = [_feat(i, 0.1 * (i + 1)) for i in range(5)]
+    layout = SemanticCanvas().to_layout(features)
+    assert len(layout) == 5
+    for point in layout:
+        assert 0.0 <= point["x"] <= 1.0
+        assert 0.0 <= point["y"] <= 1.0
+
+
+def test_to_layout_length_matches_features() -> None:
+    features = [_feat(i, float(i)) for i in range(4)]
+    layout = SemanticCanvas().to_layout(features)
+    assert len(layout) == len(features)
+
+
+def test_to_layout_highest_score_has_x_one() -> None:
+    features = [_feat(0, 0.9), _feat(1, 0.5), _feat(2, 0.1)]
+    layout = SemanticCanvas().to_layout(features)
+    # after sort descending by score, rank 0 (highest) gets x=1.0
+    top = next(p for p in layout if p["id"] == "f0")
+    assert top["x"] == 1.0
