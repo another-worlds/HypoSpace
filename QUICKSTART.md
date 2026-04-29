@@ -64,7 +64,16 @@ result = api.decode_and_score_from_model(
 print(result.scorecard)
 ```
 
-## 5) Run Streamlit explorer
+## 5) Run the exploratory notebook (optional — requires plotly + nnsight + torch)
+
+```bash
+pip install jupyter plotly nnsight torch
+jupyter notebook exploration.ipynb
+```
+
+Covers the full pipeline on real GPT-2 activations: activation histograms, cross-layer feature heatmaps, governance scatter, interactive semantic canvas, and kernel versioning.
+
+## 6) Run Streamlit explorer
 
 ```bash
 streamlit run viz/streamlit_app.py
@@ -72,9 +81,9 @@ streamlit run viz/streamlit_app.py
 
 Tabs: Kernel Explorer · Semantic Canvas · Mechanistic Probes + Governance
 
-## 6) Run tests
+## 7) Run tests
 
 ```bash
-python -m pytest -q    # 94 pass, 19 skipped (minimal install)
-python -m pytest -q    # 113 pass,  0 skipped (full install)
+python -m pytest -q    # 122 pass, 33 skipped (minimal install)
+python -m pytest -q    # 155 pass,  0 skipped (full install)
 ```

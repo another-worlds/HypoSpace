@@ -43,7 +43,8 @@ pip install nnsight pyvene diskcache
 | Mechanistic interventions (Path A — raw activations) | stub (synthetic 50%) | stub (synthetic 50%) |
 | Mechanistic interventions (Path B — live model) | stub (synthetic 50%) | real zero-ablation |
 | Live HuggingFace model extraction | ❌ | ✅ |
-| Full test suite | 105 pass, 33 skipped | 138 pass, 0 skipped |
+| Exploratory notebook (plotly) | ❌ | ✅ |
+| Full test suite | 122 pass, 33 skipped | 155 pass, 0 skipped |
 
 ### 2) Check subsystem health
 
@@ -87,7 +88,16 @@ result = api.decode_and_score_from_model(
 
 Activations are cached under `.hypo_cache/nnsight/`; repeated calls with identical arguments skip the forward pass entirely.
 
-### 5) Launch the Streamlit UI
+### 5) Run the exploratory notebook (optional — requires nnsight + torch + plotly)
+
+```bash
+pip install jupyter plotly nnsight torch
+jupyter notebook exploration.ipynb
+```
+
+The notebook covers the full pipeline on real GPT-2 activations across three layers (h.0 / h.6 / h.11) and four prompts, with interactive plotly charts for activation histograms, feature heatmaps, governance scatter plots, and the semantic canvas. All GPT-2 cells skip gracefully when nnsight is absent.
+
+### 6) Launch the Streamlit UI
 
 ```bash
 streamlit run viz/streamlit_app.py
@@ -98,7 +108,7 @@ MVP tabs:
 - Semantic Canvas (bar chart + edge table; interactive graph is post-MVP)
 - Mechanistic Probes + Governance
 
-### 6) Run tests
+### 7) Run tests
 
 ```bash
 pytest -q
@@ -140,6 +150,7 @@ The current project is organized as follows:
   - `streamlit_app.py` — interactive MVP UI.
   - `canvas.py` — visualization helpers for concept relationships.
 - `main.py` — CLI entrypoint for decode-and-score execution.
+- `exploration.ipynb` — exploratory Jupyter notebook: GPT-2 extraction, cross-layer feature analysis, governance deep-dive, semantic canvas, and kernel library (requires plotly + nnsight + torch).
 - `tests/` — smoke, contract, regression, diagnostics, nnsight, and pyvene coverage (nnsight/pyvene modules skipped when optional deps absent).
 
 ### Request/Processing Flow

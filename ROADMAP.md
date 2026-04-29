@@ -94,6 +94,9 @@ Shipped in 0.1.6:
 - ✅ Governance scorecard export — `GovernanceScorecard.to_dict()`, `HypoSpaceResult.to_dict()`; Streamlit CSV/JSON download buttons
 - ✅ Canvas 2D layout — `to_layout()` with rank-normalized x / score-normalized y; scatter chart in Streamlit
 
+Shipped in 0.1.7:
+- ✅ Exploratory notebook — `exploration.ipynb`: GPT-2 activation extraction, cross-layer feature heatmaps, governance scatter, interactive semantic canvas, kernel versioning; plotly throughout
+
 Remaining:
 - Full USAE alignment for a cross-model universal concept space.
 - Extended causal path tracing scenarios.
