@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.1.7] — 2026-04-29
+
+### Added
+- **Exploratory notebook** (`exploration.ipynb`): 24-cell Jupyter notebook covering the full
+  HypoSpace pipeline on real GPT-2 activations across three layers (h.0 / h.6 / h.11) and four
+  prompts. Sections: diagnostics, synthetic warm-up, live extraction, cross-layer feature
+  analysis, governance deep-dive, semantic canvas, and kernel library versioning. All GPT-2
+  cells guard on `NNSIGHT_AVAILABLE` and skip gracefully on a stdlib-only install.
+  Requires `jupyter`, `nbconvert`, `plotly` (new `notebook` extra in `pyproject.toml`).
+- `pyproject.toml`: added `notebook = ["jupyter", "nbconvert", "plotly"]` optional extra;
+  bumped project version `0.1.3 → 0.1.7`.
+- `requirements-dev.txt`: added `jupyter`, `nbconvert`, `plotly`.
+
+### Changed
+- Test suite: 122 stdlib-only tests (unchanged); 138 → 155 total with full optional stack
+  (torch-gated tests now exercised against torch 2.11 + nnsight 0.6.3 + pyvene 0.1.8).
+
+---
+
 ## [0.1.6] — 2026-04-28
 
 ### Fixed

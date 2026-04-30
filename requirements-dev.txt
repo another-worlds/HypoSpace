@@ -6,3 +6,7 @@ diskcache
 torch --index-url https://download.pytorch.org/whl/cpu
 nnsight
 pyvene
+# Notebook extras (exploration.ipynb)
+jupyter
+nbconvert
+plotly

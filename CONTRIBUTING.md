@@ -11,10 +11,17 @@ pip install -r requirements-dev.txt
 
 This installs the full optional stack: torch (CPU), nnsight, pyvene, diskcache, and pytest.
 
+To also run the exploratory notebook install the notebook extras:
+
+```bash
+pip install jupyter nbconvert plotly
+# or: pip install -e ".[notebook,dev]"
+```
+
 ## Running tests
 
 ```bash
-# Full suite — all 113 tests (requires full optional stack)
+# Full suite — all 155 tests (requires full optional stack)
 python -m pytest -q
 
 # Targeted test module
@@ -45,7 +52,7 @@ Examples: `fix/nan-guard`, `feat/usae-backend`, `docs/contributing`
 
 ## PR expectations
 
-- `python -m pytest -q` must pass (113/113 or more)
+- `python -m pytest -q` must pass (155/155 or more with full stack; 122/122 stdlib-only)
 - `python main.py --diagnostics` must show no new errors
 - No new `object` type annotations in any module
 - One-line module docstring in every new source file
@@ -61,5 +68,6 @@ Only these modules may import optional packages:
 | `data/pyvene_runner.py` | `pyvene`, `torch` |
 | `data/extractor.py` | `diskcache` |
 | `viz/streamlit_app.py`, `viz/canvas.py` | `streamlit` |
+| `exploration.ipynb` | `jupyter`, `nbconvert`, `plotly`, `nnsight`, `torch` |
 
 All other modules (`core/`, `interpretability/`, `api.py`, `main.py`, `diagnostics.py`) must remain stdlib-only.
