@@ -1,6 +1,7 @@
 __pycache__/
 .pytest_cache/
 .hypo_cache/
+notebooks/.ust_cache/
 *.pyc
 .venv/
 venv/
