@@ -2,6 +2,7 @@ __pycache__/
 .pytest_cache/
 .hypo_cache/
 notebooks/.ust_cache/
+.ust_cache/
 *.pyc
 .venv/
 venv/
