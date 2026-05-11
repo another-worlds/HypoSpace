@@ -199,6 +199,7 @@ class PerLayerSAE:
         self.n_epochs   = n_epochs
         self.lr         = lr
         self._trained   = False
+        self._losses: List[float] = []
         if TORCH_AVAILABLE:
             self._enc = nn.Linear(input_dim, self.dict_size, bias=True)
             self._dec = nn.Linear(self.dict_size, input_dim, bias=True)
@@ -222,6 +223,7 @@ class PerLayerSAE:
             opt.step()
             losses.append(loss.item())
         self._trained = True
+        self._losses = losses
         return losses
 
     def extract_features(self, activation: List[float]) -> List[Feature]:
@@ -363,12 +365,16 @@ class UniversalSemanticTransposer:
             sae.train_on_activations(matrix)
             self.layer_saes[layer] = sae
             raw_feats = sae.extract_features(act)
-            annotated = interpreter.annotate(raw_feats)
             if concept_prototypes and layer in concept_prototypes:
+                # Concept labeling: SAE latent → prototype alignment (genuine discovery)
                 labeler = SemanticLabeler(sae, top_per_concept=2)
                 labeler.fit(concept_prototypes[layer])
-                annotated = labeler.label(annotated)
-            self.layer_features[layer] = annotated
+                feats = labeler.label(raw_feats)
+            else:
+                # No concept prototypes supplied — fall back to intensity-band annotation
+                # so downstream code (HypoSpace API) still gets labels.
+                feats = interpreter.annotate(raw_feats)
+            self.layer_features[layer] = feats
         self._cross_layer(collector)
         self._save(collector)
         return self.layer_features
@@ -695,13 +701,15 @@ text_feats = text_tsp.run(text_coll, text_train, sae_epochs=50,
 
 for layer, feats in text_feats.items():
     f0 = feats[0]
-    print(f"  {layer}: {len(feats)} feats  top={f0.score:.4f} ({f0.label})")
+    print(f"  {layer}: {len(feats)} feats  top={f0.score:.4f} ({f0.label or '(unlabeled)'})")
     for f in feats[:4]:
-        print(f"    [{f.source_index:3d}] score={f.score:.4f}  → {f.label}")
+        lbl = f.label or "(unlabeled)"
+        print(f"    [{f.source_index:3d}] score={f.score:.4f}  → {lbl}")
 print(f"Cross-layer links: {text_tsp.cross_layer_links}")
 
 text_sc = text_tsp.governance_scorecard()
-print(f"Governance: faith={text_sc.faithfulness_score:.4f}  stab={text_sc.stability_score:.4f}  pass={text_sc.passes_thresholds}")
+print(f"Governance (stub-50pct ablation — not real interventions):")
+print(f"  faith={text_sc.faithfulness_score:.4f}  stab={text_sc.stability_score:.4f}  pass={text_sc.passes_thresholds}")
 """)
 
 # ── Modality 2: Time Series ───────────────────────────────────────────────────
@@ -758,12 +766,14 @@ ts_feats = ts_tsp.run(ts_coll, ts_train, sae_epochs=50,
 
 for layer, feats in ts_feats.items():
     f0 = feats[0]
-    print(f"  {layer}: {len(feats)} feats  top={f0.score:.4f} ({f0.label})")
+    print(f"  {layer}: {len(feats)} feats  top={f0.score:.4f} ({f0.label or '(unlabeled)'})")
     for f in feats[:4]:
-        print(f"    [{f.source_index:3d}] score={f.score:.4f}  → {f.label}")
+        lbl = f.label or "(unlabeled)"
+        print(f"    [{f.source_index:3d}] score={f.score:.4f}  → {lbl}")
 
 ts_sc = ts_tsp.governance_scorecard()
-print(f"Governance: faith={ts_sc.faithfulness_score:.4f}  stab={ts_sc.stability_score:.4f}  pass={ts_sc.passes_thresholds}")
+print(f"Governance (stub-50pct ablation — not real interventions):")
+print(f"  faith={ts_sc.faithfulness_score:.4f}  stab={ts_sc.stability_score:.4f}  pass={ts_sc.passes_thresholds}")
 """)
 
 # ── Modality 3: Audio ─────────────────────────────────────────────────────────
@@ -822,12 +832,14 @@ audio_feats = audio_tsp.run(audio_coll, audio_train, sae_epochs=50,
 
 for layer, feats in audio_feats.items():
     f0 = feats[0]
-    print(f"  {layer}: {len(feats)} feats  top={f0.score:.4f} ({f0.label})")
+    print(f"  {layer}: {len(feats)} feats  top={f0.score:.4f} ({f0.label or '(unlabeled)'})")
     for f in feats[:4]:
-        print(f"    [{f.source_index:3d}] score={f.score:.4f}  → {f.label}")
+        lbl = f.label or "(unlabeled)"
+        print(f"    [{f.source_index:3d}] score={f.score:.4f}  → {lbl}")
 
 audio_sc = audio_tsp.governance_scorecard()
-print(f"Governance: faith={audio_sc.faithfulness_score:.4f}  stab={audio_sc.stability_score:.4f}  pass={audio_sc.passes_thresholds}")
+print(f"Governance (stub-50pct ablation — not real interventions):")
+print(f"  faith={audio_sc.faithfulness_score:.4f}  stab={audio_sc.stability_score:.4f}  pass={audio_sc.passes_thresholds}")
 """)
 
 # ── Modality 4: Visual ────────────────────────────────────────────────────────
@@ -885,12 +897,79 @@ visual_feats = visual_tsp.run(visual_coll, visual_train, sae_epochs=50,
 
 for layer, feats in visual_feats.items():
     f0 = feats[0]
-    print(f"  {layer}: {len(feats)} feats  top={f0.score:.4f} ({f0.label})")
+    print(f"  {layer}: {len(feats)} feats  top={f0.score:.4f} ({f0.label or '(unlabeled)'})")
     for f in feats[:4]:
-        print(f"    [{f.source_index:3d}] score={f.score:.4f}  → {f.label}")
+        lbl = f.label or "(unlabeled)"
+        print(f"    [{f.source_index:3d}] score={f.score:.4f}  → {lbl}")
 
 visual_sc = visual_tsp.governance_scorecard()
-print(f"Governance: faith={visual_sc.faithfulness_score:.4f}  stab={visual_sc.stability_score:.4f}  pass={visual_sc.passes_thresholds}")
+print(f"Governance (stub-50pct ablation — not real interventions):")
+print(f"  faith={visual_sc.faithfulness_score:.4f}  stab={visual_sc.stability_score:.4f}  pass={visual_sc.passes_thresholds}")
+""")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SAE Quality Verification
+# ─────────────────────────────────────────────────────────────────────────────
+md("""\
+## SAE Quality Verification
+
+Before trusting any feature labels, we verify that each SAE **actually learned**
+to represent its layer's activations:
+
+- **Reconstruction MSE** — decoder output vs. original activation; low → SAE is faithful
+- **Sparsity** — mean active latents per input; should be much less than dict_size
+- **Loss convergence** — final epoch loss should be lower than epoch-1 loss
+
+If any of these fail, subsequent feature labels are statistically meaningless.
+""")
+code("""
+print("=" * 60)
+print("SAE QUALITY VERIFICATION")
+print("=" * 60)
+
+all_tsps_check = {"text": text_tsp, "timeseries": ts_tsp, "audio": audio_tsp, "visual": visual_tsp}
+
+for mod, tsp in all_tsps_check.items():
+    print(f"\\n  {mod}:")
+    for layer, sae in tsp.layer_saes.items():
+        if not sae._trained:
+            print(f"    {layer}: NOT TRAINED — labels are meaningless"); continue
+
+        # Re-collect training activations for this layer
+        train_vecs = []
+        # Use the per-modality training dict stored in the globals
+        _tdict = {"text": text_train, "timeseries": ts_train,
+                  "audio": audio_train, "visual": visual_train}[mod]
+        if layer in _tdict:
+            train_vecs = _tdict[layer]
+
+        if not train_vecs:
+            print(f"    {layer}: no training cache available"); continue
+
+        matrix = np.array(train_vecs, dtype=np.float32)
+
+        if TORCH_AVAILABLE:
+            import torch, torch.nn as nn
+            X = torch.tensor(matrix, dtype=torch.float32)
+            with torch.no_grad():
+                latent = torch.relu(sae._enc(X))
+                recon  = sae._dec(latent)
+            mse      = float(((recon - X) ** 2).mean())
+            sparsity = float((latent > 1e-6).float().mean())  # fraction of active latents
+            n_active = float((latent > 1e-6).float().sum(dim=1).mean())  # mean active per sample
+            losses   = sae._losses
+            converged = (len(losses) >= 2 and losses[-1] < losses[0]) if losses else False
+            print(f"    {layer}:  recon_mse={mse:.5f}  "
+                  f"active_frac={sparsity:.3f}  mean_active={n_active:.1f}/{sae.dict_size}  "
+                  f"converged={'YES' if converged else 'NO (check lr/epochs)'}")
+            if mse > 1.0:
+                print(f"      WARNING: high reconstruction MSE — features may not be meaningful")
+            if n_active > sae.dict_size * 0.5:
+                print(f"      WARNING: SAE is not sparse (>50% latents active) — increase L1 coeff")
+        else:
+            print(f"    {layer}: torch not available — magnitude top-k, no SAE quality check")
+
+print("\\nVerification complete.")
 """)
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1170,7 +1249,9 @@ _scores["universal"] = _univ_sc
 
 fig, ax = plt.subplots(figsize=(12, 3))
 ax.axis("off")
-ax.set_title("Governance Scorecard — All Modalities + Universal Kernel", fontsize=13, pad=10)
+ax.set_title("Governance Scorecard — All Modalities + Universal Kernel\\n"
+             "\\u26a0 Intervention method: stub-50pct (synthetic ablation, not real causal intervention)",
+             fontsize=11, pad=10)
 _cols_h = ["Modality","Faithfulness","Stability","Risk Flag","Passes","Method"]
 _rows, _colors = [], []
 for mod, sc in _scores.items():
@@ -1478,7 +1559,8 @@ for layer, sae in ts_tsp.layer_saes.items():
     llm_map = namer.name_features(sae, ts_tsp.layer_features[layer], layer_train)
     for f in ts_tsp.layer_features[layer][:4]:
         proto_lbl = f.label or "(unlabeled)"
-        llm_lbl   = llm_map.get(f.source_index, "(not activated)")
+        raw_llm   = llm_map.get(f.source_index)
+        llm_lbl   = f"[{api_mode}] {raw_llm}" if raw_llm else "(not activated)"
         print(f"  {layer} idx[{f.source_index:3d}]  score={f.score:.3f}")
         print(f"    prototype label : {proto_lbl}")
         print(f"    LLM concept name: {llm_lbl}")
@@ -1510,7 +1592,8 @@ for layer, sae in audio_tsp.layer_saes.items():
     llm_map = namer.name_features(sae, audio_tsp.layer_features[layer], layer_train)
     for f in audio_tsp.layer_features[layer][:4]:
         proto_lbl = f.label or "(unlabeled)"
-        llm_lbl   = llm_map.get(f.source_index, "(not activated)")
+        raw_llm   = llm_map.get(f.source_index)
+        llm_lbl   = f"[{api_mode}] {raw_llm}" if raw_llm else "(not activated)"
         print(f"  {layer} idx[{f.source_index:3d}]  score={f.score:.3f}")
         print(f"    prototype label : {proto_lbl}")
         print(f"    LLM concept name: {llm_lbl}")
