@@ -256,6 +256,68 @@ print("PerLayerSAE ready.")
 """)
 
 # ─────────────────────────────────────────────────────────────────────────────
+# CELL 4b — SemanticLabeler
+# ─────────────────────────────────────────────────────────────────────────────
+code("""
+class SemanticLabeler:
+    \"\"\"
+    Assigns human-readable concept names to SAE features via prototype activation.
+
+    Workflow:
+      1. Call fit(prototypes) where prototypes = {concept_name: layer_activation_vector}.
+         For each prototype, run the activation through the trained SAE encoder and
+         find which latent indices fire most strongly.  Those indices become labelled
+         "concept detectors" in the concept_map.
+      2. Call label(features) to replace Feature.label with the concept name whenever
+         feature.source_index is a known concept detector.
+
+    This is the bridge from pure statistics ("high-intensity concept around index 24")
+    to genuine semantics ("5Hz frequency detector", "noun-word direction", ...).
+    The key ingredient is *ground-truth knowledge of what each prototype input means* —
+    something the SAE alone cannot know, but the researcher supplies.
+    \"\"\"
+
+    def __init__(self, sae: PerLayerSAE, top_per_concept: int = 2):
+        self.sae             = sae
+        self.top_per_concept = top_per_concept
+        self.concept_map: Dict[int, str]   = {}
+        self._scores:     Dict[int, float] = {}
+
+    def fit(self, prototypes: Dict[str, List[float]]) -> "SemanticLabeler":
+        \"\"\"prototypes: {concept_name -> layer activation vector for that concept}.\"\"\"
+        strength: Dict[int, Tuple[str, float]] = {}
+        for name, activation in prototypes.items():
+            latent = self.sae.feature_vector(activation)
+            ranked = sorted(range(len(latent)), key=lambda i: float(latent[i]), reverse=True)
+            for idx in ranked[:self.top_per_concept]:
+                score = float(latent[idx])
+                if score < 1e-6:
+                    continue
+                if idx not in strength or score > strength[idx][1]:
+                    strength[idx] = (name, score)
+        self.concept_map = {i: n for i, (n, _) in strength.items()}
+        self._scores     = {i: s for i, (_, s) in strength.items()}
+        return self
+
+    def label(self, features: List[Feature]) -> List[Feature]:
+        \"\"\"Return new Feature list with concept names substituted for known detectors.\"\"\"
+        out = []
+        for f in features:
+            concept = self.concept_map.get(f.source_index)
+            out.append(Feature(id=f.id, layer=f.layer, score=f.score,
+                               source_index=f.source_index,
+                               label=concept if concept else f.label))
+        return out
+
+    def coverage(self, features: List[Feature]) -> float:
+        if not features:
+            return 0.0
+        return sum(1 for f in features if f.source_index in self.concept_map) / len(features)
+
+print("SemanticLabeler ready.")
+""")
+
+# ─────────────────────────────────────────────────────────────────────────────
 # CELL 5 — UniversalSemanticTransposer
 # ─────────────────────────────────────────────────────────────────────────────
 code("""
@@ -280,7 +342,14 @@ class UniversalSemanticTransposer:
 
     def run(self, collector: LayerHookCollector,
             training_data: Optional[Dict[str, List[List[float]]]] = None,
-            sae_epochs: int = 50) -> Dict[str, List[Feature]]:
+            sae_epochs: int = 50,
+            concept_prototypes: Optional[Dict[str, Dict[str, List[float]]]] = None,
+            ) -> Dict[str, List[Feature]]:
+        \"\"\"
+        concept_prototypes: {layer_name -> {concept_name -> activation_vector}}
+        When provided, SemanticLabeler replaces intensity-band labels with concept names
+        for every feature whose source_index matches a known concept detector.
+        \"\"\"
         if not collector.collected:
             raise ValueError("No activations — run a forward pass first.")
         for layer, act in collector.collected.items():
@@ -293,7 +362,13 @@ class UniversalSemanticTransposer:
                 dtype=np.float32)
             sae.train_on_activations(matrix)
             self.layer_saes[layer] = sae
-            self.layer_features[layer] = interpreter.annotate(sae.extract_features(act))
+            raw_feats = sae.extract_features(act)
+            annotated = interpreter.annotate(raw_feats)
+            if concept_prototypes and layer in concept_prototypes:
+                labeler = SemanticLabeler(sae, top_per_concept=2)
+                labeler.fit(concept_prototypes[layer])
+                annotated = labeler.label(annotated)
+            self.layer_features[layer] = annotated
         self._cross_layer(collector)
         self._save(collector)
         return self.layer_features
@@ -589,12 +664,40 @@ else:
         text_coll.inject(_n, text_model.get_activation(_n))
     text_train = _collect_batch(text_model, [make_text_embeddings(seed=s).ravel() for s in range(4)], text_coll)
 
+# ── Concept prototypes: known semantic ground truth ───────────────────────────
+# Run each named embedding prototype through the model and record which layer
+# activations it produces.  The SemanticLabeler will then discover which SAE
+# latents (or activation dimensions) fire most for each concept.
+_text_proto_embeddings = {
+    "noun-word direction":   np.array([1.,0.,0.]+[0.]*29, dtype=np.float32),
+    "verb-action direction": np.array([0.,1.,0.]+[0.]*29, dtype=np.float32),
+    "function-word circuit": np.array([0.,0.,1.]+[0.]*29, dtype=np.float32),
+}
+text_prototypes: Dict[str, Dict[str, List[float]]] = {}
+_main_text_act = {k: list(v) for k, v in text_coll.collected.items()}
+for _concept, _proto_emb in _text_proto_embeddings.items():
+    text_coll.clear()
+    if TORCH_AVAILABLE:
+        with torch.no_grad():
+            text_model(torch.tensor(_proto_emb[np.newaxis, np.newaxis, :], dtype=torch.float32))
+    else:
+        text_model.forward(_proto_emb)
+        for _n, _ in text_model.named_modules():
+            text_coll.inject(_n, text_model.get_activation(_n))
+    for _lname, _lact in text_coll.collected.items():
+        text_prototypes.setdefault(_lname, {})[_concept] = list(_lact)
+text_coll.collected.clear()
+text_coll.collected.update(_main_text_act)
+
 text_tsp   = UniversalSemanticTransposer("text-mlp", version="1.0.0", top_k=8)
-text_feats = text_tsp.run(text_coll, text_train, sae_epochs=50)
+text_feats = text_tsp.run(text_coll, text_train, sae_epochs=50,
+                          concept_prototypes=text_prototypes)
 
 for layer, feats in text_feats.items():
     f0 = feats[0]
     print(f"  {layer}: {len(feats)} feats  top={f0.score:.4f} ({f0.label})")
+    for f in feats[:4]:
+        print(f"    [{f.source_index:3d}] score={f.score:.4f}  → {f.label}")
 print(f"Cross-layer links: {text_tsp.cross_layer_links}")
 
 text_sc = text_tsp.governance_scorecard()
@@ -626,12 +729,38 @@ else:
         ts_coll.inject(_n, ts_model.get_activation(_n))
     ts_train = _collect_batch(ts_model, [_ts_sigs[i] for i in range(len(_ts_sigs))], ts_coll)
 
+# ── Concept prototypes: pure sine waves at each target frequency ──────────────
+_t64 = np.linspace(0, 1.0, 64, dtype=np.float32)
+_ts_proto_signals = {
+    "1Hz slow oscillation":  np.sin(2*np.pi*1.0*_t64),
+    "5Hz mid-range rhythm":  np.sin(2*np.pi*5.0*_t64),
+    "20Hz fast oscillation": np.sin(2*np.pi*20.0*_t64),
+}
+ts_prototypes: Dict[str, Dict[str, List[float]]] = {}
+_main_ts_act = {k: list(v) for k, v in ts_coll.collected.items()}
+for _concept, _sig in _ts_proto_signals.items():
+    ts_coll.clear()
+    if TORCH_AVAILABLE:
+        with torch.no_grad():
+            ts_model(torch.tensor(_sig[np.newaxis, np.newaxis, :], dtype=torch.float32))
+    else:
+        ts_model.forward(_sig)
+        for _n, _ in ts_model.named_modules():
+            ts_coll.inject(_n, ts_model.get_activation(_n))
+    for _lname, _lact in ts_coll.collected.items():
+        ts_prototypes.setdefault(_lname, {})[_concept] = list(_lact)
+ts_coll.collected.clear()
+ts_coll.collected.update(_main_ts_act)
+
 ts_tsp   = UniversalSemanticTransposer("timeseries-cnn", version="1.0.0", top_k=8)
-ts_feats = ts_tsp.run(ts_coll, ts_train, sae_epochs=50)
+ts_feats = ts_tsp.run(ts_coll, ts_train, sae_epochs=50,
+                      concept_prototypes=ts_prototypes)
 
 for layer, feats in ts_feats.items():
     f0 = feats[0]
     print(f"  {layer}: {len(feats)} feats  top={f0.score:.4f} ({f0.label})")
+    for f in feats[:4]:
+        print(f"    [{f.source_index:3d}] score={f.score:.4f}  → {f.label}")
 
 ts_sc = ts_tsp.governance_scorecard()
 print(f"Governance: faith={ts_sc.faithfulness_score:.4f}  stab={ts_sc.stability_score:.4f}  pass={ts_sc.passes_thresholds}")
@@ -662,12 +791,40 @@ else:
         audio_coll.inject(_n, audio_model.get_activation(_n))
     audio_train = _collect_batch(audio_model, list(_audio_spec), audio_coll)
 
+# ── Concept prototypes: FFT of pure tones (same signal, spectral representation)
+_t64_a = np.linspace(0, 1.0, 64, dtype=np.float32)
+_audio_proto_tones = {
+    "1Hz spectral peak":      np.sin(2*np.pi*1.0*_t64_a),
+    "5Hz spectral resonance": np.sin(2*np.pi*5.0*_t64_a),
+    "20Hz high-freq detector":np.sin(2*np.pi*20.0*_t64_a),
+}
+audio_prototypes: Dict[str, Dict[str, List[float]]] = {}
+_main_audio_act = {k: list(v) for k, v in audio_coll.collected.items()}
+for _concept, _sig in _audio_proto_tones.items():
+    _fft = np.abs(np.fft.rfft(_sig)).astype(np.float32)
+    _fft = _fft / (_fft.max() if _fft.max() > 1e-8 else 1.0)
+    audio_coll.clear()
+    if TORCH_AVAILABLE:
+        with torch.no_grad():
+            audio_model(torch.tensor(_fft[np.newaxis], dtype=torch.float32))
+    else:
+        audio_model.forward(_fft)
+        for _n, _ in audio_model.named_modules():
+            audio_coll.inject(_n, audio_model.get_activation(_n))
+    for _lname, _lact in audio_coll.collected.items():
+        audio_prototypes.setdefault(_lname, {})[_concept] = list(_lact)
+audio_coll.collected.clear()
+audio_coll.collected.update(_main_audio_act)
+
 audio_tsp   = UniversalSemanticTransposer("audio-mlp", version="1.0.0", top_k=8)
-audio_feats = audio_tsp.run(audio_coll, audio_train, sae_epochs=50)
+audio_feats = audio_tsp.run(audio_coll, audio_train, sae_epochs=50,
+                            concept_prototypes=audio_prototypes)
 
 for layer, feats in audio_feats.items():
     f0 = feats[0]
     print(f"  {layer}: {len(feats)} feats  top={f0.score:.4f} ({f0.label})")
+    for f in feats[:4]:
+        print(f"    [{f.source_index:3d}] score={f.score:.4f}  → {f.label}")
 
 audio_sc = audio_tsp.governance_scorecard()
 print(f"Governance: faith={audio_sc.faithfulness_score:.4f}  stab={audio_sc.stability_score:.4f}  pass={audio_sc.passes_thresholds}")
@@ -698,12 +855,39 @@ else:
         visual_coll.inject(_n, visual_model.get_activation(_n))
     visual_train = _collect_batch(visual_model, list(_vis_frames), visual_coll)
 
+# ── Concept prototypes: canonical spatial patterns ────────────────────────────
+_H, _W = 32, 32
+_vy, _vx = np.meshgrid(np.linspace(-1,1,_H), np.linspace(-1,1,_W), indexing="ij")
+_vis_proto_frames = {
+    "horizontal stripe detector": np.sin(2*np.pi*3*_vy).astype(np.float32),
+    "concentric circle circuit":  np.sin(2*np.pi*3*np.sqrt(_vx**2+_vy**2)).astype(np.float32),
+    "random noise detector":      np.random.default_rng(42).standard_normal((_H,_W)).astype(np.float32),
+}
+visual_prototypes: Dict[str, Dict[str, List[float]]] = {}
+_main_vis_act = {k: list(v) for k, v in visual_coll.collected.items()}
+for _concept, _frame in _vis_proto_frames.items():
+    visual_coll.clear()
+    if TORCH_AVAILABLE:
+        with torch.no_grad():
+            visual_model(torch.tensor(_frame[np.newaxis, np.newaxis], dtype=torch.float32))
+    else:
+        visual_model.forward(_frame)
+        for _n, _ in visual_model.named_modules():
+            visual_coll.inject(_n, visual_model.get_activation(_n))
+    for _lname, _lact in visual_coll.collected.items():
+        visual_prototypes.setdefault(_lname, {})[_concept] = list(_lact)
+visual_coll.collected.clear()
+visual_coll.collected.update(_main_vis_act)
+
 visual_tsp   = UniversalSemanticTransposer("visual-cnn", version="1.0.0", top_k=8)
-visual_feats = visual_tsp.run(visual_coll, visual_train, sae_epochs=50)
+visual_feats = visual_tsp.run(visual_coll, visual_train, sae_epochs=50,
+                              concept_prototypes=visual_prototypes)
 
 for layer, feats in visual_feats.items():
     f0 = feats[0]
     print(f"  {layer}: {len(feats)} feats  top={f0.score:.4f} ({f0.label})")
+    for f in feats[:4]:
+        print(f"    [{f.source_index:3d}] score={f.score:.4f}  → {f.label}")
 
 visual_sc = visual_tsp.governance_scorecard()
 print(f"Governance: faith={visual_sc.faithfulness_score:.4f}  stab={visual_sc.stability_score:.4f}  pass={visual_sc.passes_thresholds}")
@@ -1111,6 +1295,16 @@ except Exception as e:
 for mod, sc in {"text":text_sc,"timeseries":ts_sc,"audio":audio_sc,"visual":visual_sc}.items():
     assert hasattr(sc,"faithfulness_score"), f"{mod} missing faithfulness_score"
 
+# Semantic labels: at least one feature per modality should have a concept name
+_concept_keywords = ["direction","circuit","oscillation","rhythm","peak","resonance",
+                     "detector","stripe","circle","noise"]
+for mod, tsp in all_tsps.items():
+    all_labels = [f.label or "" for fs in tsp.layer_features.values() for f in fs]
+    semantic_count = sum(1 for lbl in all_labels
+                        if any(kw in lbl for kw in _concept_keywords))
+    if semantic_count == 0:
+        errors.append(f"{mod}: no semantic concept labels found (got: {all_labels[:3]})")
+
 if errors:
     for e in errors: print(f"ERROR: {e}")
 else:
@@ -1122,6 +1316,12 @@ else:
     print(f"  Kernel artifacts  : {len(library.list_kernels())}")
     print(f"  Torch backend     : {TORCH_AVAILABLE}")
     print(f"  Cache             : {CACHE_DIR}")
+    print()
+    print("Sample semantic labels:")
+    for mod, tsp in all_tsps.items():
+        sample = [(f.source_index, f.label) for fs in tsp.layer_features.values()
+                  for f in fs if f.label and any(kw in f.label for kw in _concept_keywords)]
+        print(f"  {mod:12s}: {sample[:3]}")
 """)
 
 # ─────────────────────────────────────────────────────────────────────────────
