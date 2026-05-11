@@ -220,7 +220,7 @@ class PerLayerSAE:
             loss   = ((self._dec(latent) - X)**2).mean() + self.SPARSITY * latent.abs().mean()
             loss.backward()
             opt.step()
-            losses.append(float(loss))
+            losses.append(loss.item())
         self._trained = True
         return losses
 
@@ -1191,6 +1191,458 @@ print("\\nGovernance summary:")
 for mod, sc in _scores.items():
     print(f"  {mod:12s}: faith={sc.faithfulness_score:.4f}  stab={sc.stability_score:.4f}  "
           f"[{'PASS' if sc.passes_thresholds else 'FAIL'}]")
+""")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# EXPERIMENT A — Richer concept vocabulary
+# ─────────────────────────────────────────────────────────────────────────────
+md("""\
+## Experiment A: Richer Concept Vocabulary
+
+The original 3-prototype labelers (noun/verb/func, 1/5/20Hz, stripes/circles/noise)
+leave many features unlabeled.  Here we extend each modality's vocabulary and
+show how denser prototype coverage produces semantically richer circuits.
+
+No retraining — we reuse the already-trained SAEs and just run more prototypes
+through the encoder to discover more named detectors.
+""")
+code("""
+print("=" * 60)
+print("EXPERIMENT A: Richer Concept Vocabulary")
+print("=" * 60)
+
+_t64r = np.linspace(0, 1.0, 64, dtype=np.float32)
+
+def _proto_by_layer(model, coll, prototypes, torch_fn=None, numpy_fn=None):
+    \"\"\"Run named prototypes through model and collect per-layer activations.\"\"\"
+    out: Dict[str, Dict[str, List[float]]] = {}
+    for concept, proto in prototypes.items():
+        coll.clear()
+        if TORCH_AVAILABLE and torch_fn:
+            with torch.no_grad():
+                model(torch_fn(proto))
+        else:
+            numpy_fn(model, coll, proto)
+        for lname, lact in coll.collected.items():
+            out.setdefault(lname, {})[concept] = list(lact)
+    return out
+
+def _label_and_report(layer_saes, layer_features, proto_by_layer, title, keywords):
+    print(f"\\n  {title}")
+    for layer, sae in layer_saes.items():
+        if layer not in proto_by_layer:
+            continue
+        lb = SemanticLabeler(sae, top_per_concept=2).fit(proto_by_layer[layer])
+        relabeled = lb.label(layer_features[layer])
+        cov = lb.coverage(relabeled)
+        semantic = [(f.source_index, f.label) for f in relabeled
+                    if f.label and any(k in f.label for k in keywords)]
+        print(f"    {layer}: coverage={cov:.0%}  named={semantic[:4]}")
+
+# ── Text: 7 grammatical roles ─────────────────────────────────────────────────
+_rich_text = {
+    "noun-word direction":   np.array([1.,0.,0.]+[0.]*29, dtype=np.float32),
+    "verb-action direction": np.array([0.,1.,0.]+[0.]*29, dtype=np.float32),
+    "function-word circuit": np.array([0.,0.,1.]+[0.]*29, dtype=np.float32),
+    "adjective-descriptor":  np.array([0.7,0.,0.7]+[0.]*29, dtype=np.float32),
+    "numeric-quantity":      np.array([0.,0.,0.,1.]+[0.]*28, dtype=np.float32),
+    "proper-name circuit":   np.array([0.,0.5,0.5]+[0.]*29, dtype=np.float32),
+    "negation-inversion":    np.array([-1.,0.,0.]+[0.]*29, dtype=np.float32),
+}
+_rtp_text = _proto_by_layer(
+    text_model, text_coll, _rich_text,
+    torch_fn=lambda e: torch.tensor(e[np.newaxis,np.newaxis,:], dtype=torch.float32),
+    numpy_fn=lambda m,c,e: [c.inject(n, m.get_activation(n))
+                             for n,_ in m.named_modules() if m.forward(e) is not None or True],
+)
+text_coll.collected.update(_main_text_act)
+_label_and_report(text_tsp.layer_saes, text_tsp.layer_features, _rtp_text,
+                  "Text (7 concepts)",
+                  ["noun","verb","func","adj","numeric","proper","negat"])
+
+# ── Time series: 8 frequencies + harmonic ─────────────────────────────────────
+_rich_ts = {
+    "0.5Hz ultra-slow wave":    np.sin(2*np.pi*0.5*_t64r).astype(np.float32),
+    "1Hz slow oscillation":     np.sin(2*np.pi*1.0*_t64r).astype(np.float32),
+    "2Hz sub-alpha rhythm":     np.sin(2*np.pi*2.0*_t64r).astype(np.float32),
+    "5Hz mid-range rhythm":     np.sin(2*np.pi*5.0*_t64r).astype(np.float32),
+    "10Hz alpha oscillation":   np.sin(2*np.pi*10.0*_t64r).astype(np.float32),
+    "20Hz fast oscillation":    np.sin(2*np.pi*20.0*_t64r).astype(np.float32),
+    "harmonic-chord [3+4.5Hz]": ((np.sin(2*np.pi*3.0*_t64r)+np.sin(2*np.pi*4.5*_t64r))/2).astype(np.float32),
+    "dc-baseline":              np.ones(64, dtype=np.float32),
+}
+_rtp_ts = _proto_by_layer(
+    ts_model, ts_coll, _rich_ts,
+    torch_fn=lambda s: torch.tensor(s[np.newaxis,np.newaxis,:], dtype=torch.float32),
+    numpy_fn=lambda m,c,s: [c.inject(n, m.get_activation(n))
+                             for n,_ in m.named_modules() if m.forward(s) is not None or True],
+)
+ts_coll.collected.update(_main_ts_act)
+_label_and_report(ts_tsp.layer_saes, ts_tsp.layer_features, _rtp_ts,
+                  "Time series (8 concepts)",
+                  ["Hz","harmonic","baseline"])
+
+# ── Audio: FFT of the same extended signals ───────────────────────────────────
+_rich_audio = {k: (lambda s: (lambda f: f/(f.max() if f.max()>1e-8 else 1.))(
+    np.abs(np.fft.rfft(s)).astype(np.float32)))(v) for k,v in _rich_ts.items()}
+_rtp_audio = _proto_by_layer(
+    audio_model, audio_coll, _rich_audio,
+    torch_fn=lambda f: torch.tensor(f[np.newaxis], dtype=torch.float32),
+    numpy_fn=lambda m,c,f: [c.inject(n, m.get_activation(n))
+                             for n,_ in m.named_modules() if m.forward(f) is not None or True],
+)
+audio_coll.collected.update(_main_audio_act)
+_label_and_report(audio_tsp.layer_saes, audio_tsp.layer_features, _rtp_audio,
+                  "Audio (8 concepts)",
+                  ["Hz","harmonic","baseline","spectral"])
+
+# ── Visual: 5 spatial patterns ────────────────────────────────────────────────
+_H2, _W2 = 32, 32
+_vy2, _vx2 = np.meshgrid(np.linspace(-1,1,_H2), np.linspace(-1,1,_W2), indexing="ij")
+_rich_vis = {
+    "horizontal stripe detector": np.sin(2*np.pi*3*_vy2).astype(np.float32),
+    "diagonal stripe detector":   np.sin(2*np.pi*3*(_vx2+_vy2)/np.sqrt(2)).astype(np.float32),
+    "concentric circle circuit":  np.sin(2*np.pi*3*np.sqrt(_vx2**2+_vy2**2)).astype(np.float32),
+    "radial gradient detector":   (np.arctan2(_vy2,_vx2)/np.pi).astype(np.float32),
+    "random noise detector":      np.random.default_rng(42).standard_normal((_H2,_W2)).astype(np.float32),
+}
+_rtp_vis = _proto_by_layer(
+    visual_model, visual_coll, _rich_vis,
+    torch_fn=lambda f: torch.tensor(f[np.newaxis,np.newaxis], dtype=torch.float32),
+    numpy_fn=lambda m,c,f: [c.inject(n, m.get_activation(n))
+                             for n,_ in m.named_modules() if m.forward(f) is not None or True],
+)
+visual_coll.collected.update(_main_vis_act)
+_label_and_report(visual_tsp.layer_saes, visual_tsp.layer_features, _rtp_vis,
+                  "Visual (5 concepts)",
+                  ["stripe","circle","radial","noise","diagonal"])
+""")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# EXPERIMENT B — LLM-named concepts
+# ─────────────────────────────────────────────────────────────────────────────
+md("""\
+## Experiment B: LLM-Named Concepts
+
+`LLMConceptNamer` collects activation statistics for each SAE feature across
+all labeled training examples, then asks Claude to synthesize a concept name.
+
+This is the *unsupervised* version of `SemanticLabeler`: instead of requiring
+the researcher to pre-define prototype inputs, Claude infers what the feature
+*represents* purely from which labeled examples activate it most.
+
+When `ANTHROPIC_API_KEY` is set, real Claude API calls are made.
+Otherwise a rule-based concept-synthesis fallback runs, which still
+demonstrates the structure: frequency range → oscillation name,
+pattern category → spatial name, grammatical cluster → role name.
+""")
+code("""
+import os
+
+try:
+    import anthropic as _anthropic
+    _ANTHROPIC_AVAILABLE = True
+except ImportError:
+    _ANTHROPIC_AVAILABLE = False
+
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+
+
+class LLMConceptNamer:
+    \"\"\"
+    Names SAE features by asking Claude what concept they represent.
+
+    For each feature, collects the top-activating labeled training examples and
+    formats a prompt: "A neural feature fires most for: {description}. Name it."
+    Falls back to rule-based concept synthesis when the API is unavailable.
+    \"\"\"
+
+    _FREQ_BANDS = [
+        (0,  1.5,  "ultra-slow oscillation"),
+        (1.5, 3.5, "slow oscillation"),
+        (3.5, 7.5, "mid-range rhythm"),
+        (7.5,15.,  "alpha oscillation"),
+        (15., 99., "fast oscillation"),
+    ]
+
+    def __init__(self, model="claude-haiku-4-5-20251001"):
+        self._model = model
+        self._client = (
+            _anthropic.Anthropic(api_key=ANTHROPIC_API_KEY, base_url=os.environ.get("ANTHROPIC_BASE_URL","https://api.anthropic.com"))
+            if _ANTHROPIC_AVAILABLE and ANTHROPIC_API_KEY else None
+        )
+
+    def collect_stats(self, sae, labeled_training):
+        \"\"\"labeled_training: [(label_str, activation_vec), ...].
+        Returns Dict[source_index, [(label, score), ...]] sorted by score desc.\"\"\"
+        stats: Dict[int, List[Tuple[str, float]]] = {}
+        for label, act in labeled_training:
+            latent = sae.feature_vector(act)
+            for idx, score in enumerate(latent):
+                if float(score) > 1e-4:
+                    stats.setdefault(idx, []).append((label, float(score)))
+        return {i: sorted(v, key=lambda x: x[1], reverse=True)
+                for i, v in stats.items()}
+
+    def name_features(self, sae, features, labeled_training):
+        \"\"\"Return Dict[source_index -> concept_name] for each feature.\"\"\"
+        stats = self.collect_stats(sae, labeled_training)
+        names = {}
+        for f in features:
+            top = stats.get(f.source_index, [])[:4]
+            if not top:
+                continue
+            desc = ", ".join(f"{lbl} ({sc:.2f})" for lbl, sc in top)
+            names[f.source_index] = self._name(desc, top)
+        return names
+
+    def _name(self, desc, top_activations):
+        if self._client:
+            return self._call_api(desc)
+        return self._rule_based(top_activations)
+
+    def _call_api(self, desc):
+        try:
+            resp = self._client.messages.create(
+                model=self._model, max_tokens=16,
+                messages=[{"role": "user", "content":
+                    f"A neural feature activates for: {desc}. "
+                    f"Name this concept detector in 3-5 words (no explanation):"}])
+            return resp.content[0].text.strip().strip('"').strip("'")
+        except Exception as e:
+            return f"api-error({str(e)[:20]})"
+
+    def _rule_based(self, top_activations):
+        \"\"\"Synthesize a concept name from common themes in top-activating labels.\"\"\"
+        labels = [lbl for lbl, _ in top_activations]
+        # Frequency detection
+        freqs = []
+        for lbl in labels:
+            for part in lbl.split():
+                try:
+                    f = float(part.rstrip("Hz").rstrip("hz"))
+                    freqs.append(f); break
+                except ValueError:
+                    pass
+        if freqs:
+            avg_f = sum(freqs) / len(freqs)
+            for lo, hi, name in self._FREQ_BANDS:
+                if lo <= avg_f < hi:
+                    return name
+        # Spatial pattern detection
+        for kw, name in [("stripe","stripe-like filter"), ("circle","ring detector"),
+                         ("radial","radial gradient"), ("noise","noise/texture"),
+                         ("diagonal","diagonal edge filter")]:
+            if any(kw in lbl.lower() for lbl in labels):
+                return name
+        # Grammatical role detection
+        for kw, name in [("noun","nominal concept"), ("verb","action concept"),
+                         ("func","function-word circuit"), ("adj","modifier circuit"),
+                         ("negat","negation inversion"), ("proper","entity name")]:
+            if any(kw in lbl.lower() for lbl in labels):
+                return name
+        # Generic fallback
+        return labels[0][:30] if labels else "unknown concept"
+
+
+namer = LLMConceptNamer()
+api_mode = "Claude API" if namer._client else "rule-based synthesis"
+print(f"LLMConceptNamer running in: {api_mode}")
+print()
+
+# ── Run on time series (most interpretable because ground truth is mathematical) ──
+_ts_labeled_train = []
+for i, (sig, lbl) in enumerate(zip(_ts_sigs, _ts_lbls)):
+    for _lyr in ts_tsp.layer_saes:
+        ts_coll.clear()
+        if TORCH_AVAILABLE:
+            with torch.no_grad():
+                ts_model(torch.tensor(sig[np.newaxis], dtype=torch.float32))
+        else:
+            ts_model.forward(sig)
+            for _n, _ in ts_model.named_modules():
+                ts_coll.inject(_n, ts_model.get_activation(_n))
+    for _lyr, _act in ts_coll.collected.items():
+        _ts_labeled_train.append((lbl, _act))
+    if i >= 5:
+        break   # use first 6 examples for stats
+
+ts_coll.collected.update(_main_ts_act)
+
+print("Time Series — LLM concept names vs prototype labels:")
+for layer, sae in ts_tsp.layer_saes.items():
+    layer_train = [(lbl, act) for (lbl, act) in _ts_labeled_train
+                   if len(act) == sae.input_dim]
+    if not layer_train:
+        continue
+    llm_map = namer.name_features(sae, ts_tsp.layer_features[layer], layer_train)
+    for f in ts_tsp.layer_features[layer][:4]:
+        proto_lbl = f.label or "(unlabeled)"
+        llm_lbl   = llm_map.get(f.source_index, "(not activated)")
+        print(f"  {layer} idx[{f.source_index:3d}]  score={f.score:.3f}")
+        print(f"    prototype label : {proto_lbl}")
+        print(f"    LLM concept name: {llm_lbl}")
+
+# ── Run on audio ───────────────────────────────────────────────────────────────
+_audio_labeled_train = []
+for i, (spec, lbl) in enumerate(zip(_audio_spec, _audio_lbls)):
+    for _lyr in audio_tsp.layer_saes:
+        audio_coll.clear()
+        if TORCH_AVAILABLE:
+            with torch.no_grad():
+                audio_model(torch.tensor(spec[np.newaxis], dtype=torch.float32))
+        else:
+            audio_model.forward(spec)
+            for _n, _ in audio_model.named_modules():
+                audio_coll.inject(_n, audio_model.get_activation(_n))
+    for _lyr, _act in audio_coll.collected.items():
+        _audio_labeled_train.append((lbl, _act))
+    if i >= 5:
+        break
+audio_coll.collected.update(_main_audio_act)
+
+print("\\nAudio — LLM concept names vs prototype labels:")
+for layer, sae in audio_tsp.layer_saes.items():
+    layer_train = [(lbl, act) for (lbl, act) in _audio_labeled_train
+                   if len(act) == sae.input_dim]
+    if not layer_train:
+        continue
+    llm_map = namer.name_features(sae, audio_tsp.layer_features[layer], layer_train)
+    for f in audio_tsp.layer_features[layer][:4]:
+        proto_lbl = f.label or "(unlabeled)"
+        llm_lbl   = llm_map.get(f.source_index, "(not activated)")
+        print(f"  {layer} idx[{f.source_index:3d}]  score={f.score:.3f}")
+        print(f"    prototype label : {proto_lbl}")
+        print(f"    LLM concept name: {llm_lbl}")
+""")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# EXPERIMENT C — Real text via GPT-2 (upgraded)
+# ─────────────────────────────────────────────────────────────────────────────
+md("""\
+## Experiment C: Real Text Semantics via GPT-2
+
+Extracts features from GPT-2 at three depths — early (`h.0`), mid (`h.6`), late (`h.11`) —
+using four linguistically diverse prompt categories:
+
+| Category | Example |
+|---|---|
+| **Color / perception** | "The sky is a vivid shade of blue" |
+| **Action / motion** | "She sprinted quickly across the finish line" |
+| **Abstract concept** | "Freedom and justice are fundamental values" |
+| **Spatial / relation** | "The red ball is above the wooden table" |
+
+`SemanticLabeler` uses sentence-level prototypes — each category sentence is treated
+as a concept prototype. Features that fire most for color sentences get labeled
+"color/perception", etc.  This demonstrates concept drift across layers:
+early layers catch surface form, late layers catch meaning.
+""")
+code("""
+if not NNSIGHT_AVAILABLE:
+    print("Skipping GPT-2 experiment — install torch + nnsight to enable.")
+else:
+    _GPT2_LAYER_PATHS = ["transformer.h.0", "transformer.h.6", "transformer.h.11"]
+    _GPT2_LAYER_NAMES = {"transformer.h.0": "early(h0)",
+                         "transformer.h.6": "mid(h6)",
+                         "transformer.h.11": "late(h11)"}
+
+    # Four prompt categories with concept labels
+    _gpt2_prompts = {
+        "color-perception":   [
+            "The sky is a vivid shade of blue",
+            "Bright red roses bloomed in the garden",
+            "She painted the wall a soft green",
+        ],
+        "action-motion":      [
+            "She sprinted quickly across the finish line",
+            "The dog jumped over the tall fence",
+            "He carefully carried the heavy boxes upstairs",
+        ],
+        "abstract-concept":   [
+            "Freedom and justice are fundamental values",
+            "The concept of infinity fascinates mathematicians",
+            "Truth is often more complex than it appears",
+        ],
+        "spatial-relation":   [
+            "The red ball is above the wooden table",
+            "Turn left at the intersection and go straight",
+            "The keys were hidden beneath the old rug",
+        ],
+    }
+
+    # Flatten to [(label, text), ...]
+    _all_gpt2_prompts = [(lbl, txt)
+                        for lbl, txts in _gpt2_prompts.items()
+                        for txt in txts]
+
+    try:
+        _gpt2_extractor = NNSightExtractor("gpt2", device="cpu",
+                                          cache_dir=str(CACHE_DIR / "gpt2_cache"))
+
+        # ── Collect training activations (all prompts, all layers) ───────────
+        gpt2_train: Dict[str, List[List[float]]] = {}
+        gpt2_labeled_train: List[Tuple[str, str, List[float]]] = []  # (label, lyr, act)
+        for lbl, txt in _all_gpt2_prompts:
+            acts = _gpt2_extractor.extract_layers(txt, _GPT2_LAYER_PATHS)
+            for lp, act in acts.items():
+                name = _GPT2_LAYER_NAMES[lp]
+                gpt2_train.setdefault(name, []).append(preprocessor.normalize(act))
+                gpt2_labeled_train.append((lbl, name, act))
+        print(f"GPT-2 training set: {len(_all_gpt2_prompts)} prompts × {len(_GPT2_LAYER_PATHS)} layers")
+
+        # ── Build per-layer category prototypes ──────────────────────────────
+        gpt2_prototypes: Dict[str, Dict[str, List[float]]] = {}
+        for cat, prompts in _gpt2_prompts.items():
+            # Average activation per category per layer
+            cat_acts: Dict[str, List[np.ndarray]] = {}
+            for txt in prompts:
+                acts = _gpt2_extractor.extract_layers(txt, _GPT2_LAYER_PATHS)
+                for lp, act in acts.items():
+                    name = _GPT2_LAYER_NAMES[lp]
+                    cat_acts.setdefault(name, []).append(np.array(act, dtype=np.float32))
+            for lyr, vecs in cat_acts.items():
+                mean_act = np.mean(np.stack(vecs), axis=0).tolist()
+                gpt2_prototypes.setdefault(lyr, {})[cat] = mean_act
+
+        # ── Inject one test activation and run transposer ────────────────────
+        _test_prompt = "The color green reminds me of nature"
+        _test_acts = _gpt2_extractor.extract_layers(_test_prompt, _GPT2_LAYER_PATHS)
+
+        gpt2_coll = LayerHookCollector()
+        for lp, act in _test_acts.items():
+            gpt2_coll.inject(_GPT2_LAYER_NAMES[lp], act)
+
+        gpt2_tsp = UniversalSemanticTransposer("gpt2", version="1.0.0", top_k=8)
+        gpt2_feats = gpt2_tsp.run(gpt2_coll, gpt2_train, sae_epochs=30,
+                                  concept_prototypes=gpt2_prototypes)
+
+        print(f"\\nGPT-2 prompt: \\\"{_test_prompt}\\\"")
+        print(f"Layers: {list(gpt2_feats.keys())}")
+        print()
+        for layer in ["early(h0)", "mid(h6)", "late(h11)"]:
+            if layer not in gpt2_feats:
+                continue
+            feats = gpt2_feats[layer]
+            print(f"  {layer}:")
+            for f in feats[:5]:
+                print(f"    [{f.source_index:4d}] {f.score:.4f}  → {f.label}")
+
+        # ── Cross-layer concept drift ─────────────────────────────────────────
+        print("\\nCross-layer concept drift (same prompt, different depths):")
+        _categories = list(_gpt2_prompts.keys())
+        for cat in _categories:
+            counts = {}
+            for layer, feats in gpt2_feats.items():
+                n = sum(1 for f in feats if f.label == cat)
+                counts[layer] = n
+            bar = " | ".join(f"{l}: {n}" for l, n in counts.items())
+            print(f"  {cat:20s} — {bar}")
+
+        print(f"\\nCross-layer links: {len(gpt2_tsp.cross_layer_links)}")
+        print(f"GPT-2 experiment complete.")
+
+    except Exception as exc:
+        print(f"GPT-2 experiment skipped: {exc}")
 """)
 
 # ─────────────────────────────────────────────────────────────────────────────
